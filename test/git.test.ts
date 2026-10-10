@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 import { execFile as execFileCallback } from 'node:child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { realpathSync } from 'node:fs'
+import { tmpdir as osTmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import test from 'node:test'
@@ -17,6 +18,9 @@ import {
   resetGitCommit,
   revertGitCommit,
 } from '../server/features/git/git.ts'
+
+// macOS exposes the temporary directory through a symlink; compare canonical paths.
+const tmpdir = (): string => realpathSync(osTmpdir())
 
 const execFile = promisify(execFileCallback)
 

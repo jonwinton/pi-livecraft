@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, realpath, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { realpathSync } from 'node:fs'
+import { tmpdir as osTmpdir } from 'node:os'
 import { join, sep } from 'node:path'
 import test from 'node:test'
 import { listRecentPiSessions, resolvePiSessionDirectory } from '../server/pi-session-store.ts'
+
+// macOS exposes the temporary directory through a symlink; compare canonical paths.
+const tmpdir = (): string => realpathSync(osTmpdir())
 
 async function fixture(): Promise<{ directory: string; workspace: string }> {
   return {

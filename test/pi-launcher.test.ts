@@ -1,10 +1,14 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { realpathSync } from 'node:fs'
+import { tmpdir as osTmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { resolvePiLauncher } from '../server/pi-launcher.ts'
+
+// macOS exposes the temporary directory through a symlink; compare canonical paths.
+const tmpdir = (): string => realpathSync(osTmpdir())
 
 async function npmPiLayout(): Promise<{ root: string; bin: string; cli: string }> {
   const root = await mkdtemp(join(tmpdir(), 'pi launcher ü '))
