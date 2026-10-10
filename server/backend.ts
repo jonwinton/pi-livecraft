@@ -32,6 +32,7 @@ import { activeSessionMessages, LiveSessionEvents } from './session-snapshot.ts'
 import { loadPromptTemplates, savePromptTemplate } from './prompt-templates.ts'
 import { externalWorkspacePath, openPath } from './system-integration.ts'
 import { expandHomePath } from './home-path.ts'
+import { isJsonRequest, isLocalRequest } from './local-request.ts'
 import type {
   DirectoryListing,
   JsonObject,
@@ -95,6 +96,7 @@ server.listen(port, host, () => {
 async function route(request: IncomingMessage, response: ServerResponse): Promise<void> {
   const method = request.method ?? 'GET'
   const url = new URL(request.url ?? '/', `http://${host}`)
+  if (!isLocalRequest(request.headers)) throw new HttpError(403, 'Only local requests are allowed')
 
   if (method === 'GET' && url.pathname === '/api/health') {
     sendJson(response, manager.connected ? 200 : 503, {
@@ -552,6 +554,8 @@ async function listDirectories(path: string): Promise<DirectoryListing> {
 
 /** Reads the JSON body with a size limit to protect the backend from oversized requests. */
 async function readJsonBody(request: IncomingMessage): Promise<JsonObject> {
+  if (!isJsonRequest(request.headers))
+    throw new HttpError(415, 'Request body must be application/json')
   const chunks: Buffer[] = []
   let size = 0
   for await (const chunk of request) {
