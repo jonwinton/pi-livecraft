@@ -7,6 +7,9 @@ import { assistantText, cheapestAvailableModel } from './prompt-improvement.ts'
 import type { JsonObject } from '../shared/types.ts'
 import { isObject } from '../shared/is-object.ts'
 
+/** Matches the backend's longest isolated-prompt wait so a tool-using run is not cut short. */
+const isolatedPromptTimeoutMs = 5 * 60_000
+
 /**
  * Creates the dedicated isolated Pi profile directory and copies auth/models from the
  * user's main config so the isolated process can authenticate and list models without
@@ -95,7 +98,7 @@ export async function runIsolatedPrompt(
 
     const settled = waitForPiEvent(pi, 'agent_settled')
     await Promise.all([
-      pi.request({ type: 'prompt', message: options.prompt }),
+      pi.request({ type: 'prompt', message: options.prompt }, isolatedPromptTimeoutMs),
       settled,
     ])
 
@@ -118,7 +121,10 @@ export async function runIsolatedPrompt(
 /** Waits for a terminal Pi event while bounding failures from a stalled disposable process. */
 function waitForPiEvent(pi: PiProcess, type: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => finish(new Error(`Pi event timed out: ${type}`)), 2 * 60_000)
+    const timeout = setTimeout(
+      () => finish(new Error(`Pi event timed out: ${type}`)),
+      isolatedPromptTimeoutMs,
+    )
     const onEvent = (event: JsonObject): void => {
       if (event.type === type) finish()
     }
