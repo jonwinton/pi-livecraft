@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFile as execFileCallback } from 'node:child_process'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { realpathSync } from 'node:fs'
 import { tmpdir as osTmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -246,6 +246,40 @@ test('discards only the selected file, including renamed and untracked files', a
     assert.equal(
       (await readFile(join(directory, 'second.ts'), 'utf8')).replaceAll('\r\n', '\n'),
       'second\n',
+    )
+  } finally {
+    await rm(directory, { force: true, recursive: true })
+  }
+})
+
+test('diffs and discards root-relative paths from a workspace subdirectory', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'pi-livecraft-git-'))
+  const workspace = join(directory, 'sub')
+  try {
+    await execFile('git', ['init', '--quiet'], { cwd: directory })
+    await execFile('git', ['config', 'user.email', 'test@example.com'], { cwd: directory })
+    await execFile('git', ['config', 'user.name', 'Test User'], { cwd: directory })
+    await mkdir(workspace)
+    await writeFile(join(workspace, 'file.ts'), 'first\n')
+    await execFile('git', ['add', '.'], { cwd: directory })
+    await execFile('git', ['commit', '--quiet', '-m', 'Initial'], { cwd: directory })
+    await writeFile(join(workspace, 'file.ts'), 'changed\n')
+    await writeFile(join(workspace, 'new.ts'), 'one\ntwo\n')
+
+    const snapshot = await getGitSnapshot(workspace)
+    assert.deepEqual(snapshot.files, [
+      { path: 'sub/file.ts', status: 'modified', additions: 1, deletions: 1 },
+      { path: 'sub/new.ts', status: 'added', additions: 2, deletions: 0 },
+    ])
+    assert.match((await getGitFileDiff(workspace, 'sub/file.ts')).diff, /\+changed/)
+    assert.match((await getGitFileDiff(workspace, 'sub/new.ts')).diff, /\+two/)
+
+    await discardFileChanges(workspace, 'sub/file.ts')
+    await discardFileChanges(workspace, 'sub/new.ts')
+    assert.deepEqual((await getGitSnapshot(workspace)).files, [])
+    assert.equal(
+      (await readFile(join(workspace, 'file.ts'), 'utf8')).replaceAll('\r\n', '\n'),
+      'first\n',
     )
   } finally {
     await rm(directory, { force: true, recursive: true })

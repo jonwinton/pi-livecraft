@@ -16,17 +16,18 @@ interface GitCommandResult {
 
 /** Aggregates Git state, file statistics, and the number of commits waiting to be pushed. */
 export async function getGitSnapshot(cwd: string): Promise<GitSnapshot> {
-  const repository = await runGit(cwd, ['rev-parse', '--is-inside-work-tree'], [0, 128])
-  if (repository.exitCode !== 0 || repository.stdout.trim() !== 'true')
+  const toplevel = await runGit(cwd, ['rev-parse', '--show-toplevel'], [0, 128])
+  const root = toplevel.exitCode === 0 ? toplevel.stdout.trim() : ''
+  if (!root)
     return { repository: false, root: null, branch: null, files: [], ahead: 0, commits: [] }
 
-  const [root, status, unstaged, staged, branch, upstream] = await Promise.all([
-    runGit(cwd, ['rev-parse', '--show-toplevel']),
-    runGit(cwd, ['status', '--porcelain=v1', '-z', '--untracked-files=all']),
-    runGit(cwd, ['diff', '--numstat', '-z']),
-    runGit(cwd, ['diff', '--cached', '--numstat', '-z']),
-    runGit(cwd, ['branch', '--show-current']),
-    runGit(cwd, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], [0, 128]),
+  // Porcelain and numstat paths are root-relative, so every path-based command runs from the root.
+  const [status, unstaged, staged, branch, upstream] = await Promise.all([
+    runGit(root, ['status', '--porcelain=v1', '-z', '--untracked-files=all']),
+    runGit(root, ['diff', '--numstat', '-z']),
+    runGit(root, ['diff', '--cached', '--numstat', '-z']),
+    runGit(root, ['branch', '--show-current']),
+    runGit(root, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], [0, 128]),
   ])
 
   const changes = parseGitStatus(status.stdout)
@@ -34,7 +35,7 @@ export async function getGitSnapshot(cwd: string): Promise<GitSnapshot> {
   await Promise.all(
     changes.filter((change) => change.status === 'added' && !counts.has(change.path)).map(
       async (change) => {
-        const result = await runGit(cwd, [
+        const result = await runGit(root, [
           'diff',
           '--no-index',
           '--numstat',
@@ -53,11 +54,11 @@ export async function getGitSnapshot(cwd: string): Promise<GitSnapshot> {
     ),
   )
 
-  const commits = upstream.exitCode === 0 ? await unpushedCommits(cwd) : []
+  const commits = upstream.exitCode === 0 ? await unpushedCommits(root) : []
 
   return {
     repository: true,
-    root: root.stdout.trim() || null,
+    root,
     branch: branch.stdout.trim() || 'HEAD',
     files: changes.map((change) => {
       const count = counts.get(change.path)
@@ -75,12 +76,13 @@ export async function getGitFileDiff(
   commitHash?: string,
 ): Promise<GitFileDiff> {
   const snapshot = await getGitSnapshot(cwd)
+  const root = snapshot.root ?? cwd
   if (commitHash) {
     const commit = snapshot.commits.find(({ hash }) => hash === commitHash)
     const file = commit?.files.find((change) => change.path === path)
     if (!file || (file.status !== 'added' && file.status !== 'modified'))
       throw new Error('This file cannot be displayed.')
-    const result = await runGit(cwd, [
+    const result = await runGit(root, [
       'diff-tree',
       '--no-commit-id',
       '--root',
@@ -98,10 +100,13 @@ export async function getGitFileDiff(
   if (!file || (file.status !== 'added' && file.status !== 'modified'))
     throw new Error('This file cannot be displayed.')
 
-  const trackedDiff = await runGit(cwd, ['diff', 'HEAD', '--', path], [0, 128])
+  const trackedDiff = await runGit(root, ['diff', 'HEAD', '--', path], [0, 128])
   if (trackedDiff.stdout) return { path, diff: trackedDiff.stdout }
 
-  const untrackedDiff = await runGit(cwd, ['diff', '--no-index', '--', '/dev/null', path], [0, 1])
+  const untrackedDiff = await runGit(root, ['diff', '--no-index', '--', '/dev/null', path], [
+    0,
+    1,
+  ])
   return { path, diff: untrackedDiff.stdout }
 }
 
@@ -204,16 +209,17 @@ export async function discardFileChanges(cwd: string, path: string): Promise<voi
   if (!snapshot.repository) throw new Error('The current directory is not a Git repository.')
   const file = snapshot.files.find((change) => change.path === path)
   if (!file) throw new Error('This file has no changes to discard.')
+  const root = snapshot.root ?? cwd
 
   if (file.status === 'added') {
-    await runGit(cwd, ['rm', '-f', '--cached', '--', path], [0, 1, 128])
-    await runGit(cwd, ['clean', '-fd', '--', path])
+    await runGit(root, ['rm', '-f', '--cached', '--', path], [0, 1, 128])
+    await runGit(root, ['clean', '-fd', '--', path])
     return
   }
 
-  const status = await runGit(cwd, ['status', '--porcelain=v1', '-z', '--untracked-files=all'])
+  const status = await runGit(root, ['status', '--porcelain=v1', '-z', '--untracked-files=all'])
   const paths = pathsForGitStatus(status.stdout, path)
-  await runGit(cwd, ['restore', '--source=HEAD', '--staged', '--worktree', '--', ...paths])
+  await runGit(root, ['restore', '--source=HEAD', '--staged', '--worktree', '--', ...paths])
 }
 
 /** Discards all uncommitted changes, including untracked files (but keeps ignored files). */
@@ -221,16 +227,17 @@ export async function discardChanges(cwd: string): Promise<void> {
   const snapshot = await getGitSnapshot(cwd)
   if (!snapshot.repository) throw new Error('The current directory is not a Git repository.')
   if (snapshot.files.length === 0) throw new Error('There are no changes to discard.')
+  const root = snapshot.root ?? cwd
   // On a branch with commits, restore index + working tree to HEAD.
   // On an unborn branch (no commits), remove everything from the index.
-  const branch = await runGit(cwd, ['rev-parse', '--verify', 'HEAD'], [0, 1])
+  const branch = await runGit(root, ['rev-parse', '--verify', 'HEAD'], [0, 1])
   if (branch.exitCode === 0) {
-    await runGit(cwd, ['reset', '--hard', 'HEAD'])
+    await runGit(root, ['reset', '--hard', 'HEAD'])
   } else {
-    await runGit(cwd, ['rm', '-rf', '--cached', '.'])
+    await runGit(root, ['rm', '-rf', '--cached', '.'])
   }
   // Remove untracked files (including those in .gitignore'd dirs but not ignored files).
-  await runGit(cwd, ['clean', '-fd'])
+  await runGit(root, ['clean', '-fd'])
 }
 
 /** Returns every path involved in a status entry, preserving a rename source path. */
