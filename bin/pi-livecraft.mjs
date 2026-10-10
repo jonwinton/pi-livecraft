@@ -7,7 +7,8 @@ const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const child = spawn(npmCommand, ['run', 'dev'], {
   cwd: projectRoot,
-  shell: false,
+  // Node refuses to spawn .cmd files without a shell (EINVAL); the arguments are constants.
+  shell: process.platform === 'win32',
   stdio: 'inherit',
 })
 
