@@ -63,14 +63,15 @@ export class ManagerClient extends EventEmitter {
       this.#resolveConnectionWaiters()
       this.emit('connected')
     })
-    socket.on('data', (chunk) => {
+    const read = (decode: () => void): void => {
       try {
-        decoder.push(chunk)
+        decode()
       } catch (error) {
         socket.destroy(error instanceof Error ? error : new Error(String(error)))
       }
-    })
-    socket.on('end', () => decoder.end())
+    }
+    socket.on('data', (chunk) => read(() => decoder.push(chunk)))
+    socket.on('end', () => read(() => decoder.end()))
     socket.on('error', () => undefined)
     socket.on('close', () => {
       this.connected = false

@@ -1,6 +1,34 @@
+import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
+import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { delimiter, join } from 'node:path'
 import test from 'node:test'
-import { forceKillChild } from '../server/pi-process.ts'
+import { forceKillChild, PiProcess } from '../server/pi-process.ts'
+
+test(
+  'terminates Pi and rejects pending requests when stdout is not valid JSONL',
+  { skip: process.platform === 'win32', timeout: 10_000 },
+  async (t) => {
+    const directory = await mkdtemp(join(tmpdir(), 'pi-process-'))
+    const previousPath = process.env.PATH
+    t.after(async () => {
+      process.env.PATH = previousPath
+      await rm(directory, { force: true, recursive: true })
+    })
+    await writeFile(
+      join(directory, 'pi'),
+      `#!/usr/bin/env node\nprocess.stdin.once('data', () => process.stdout.write('not json\\n'))\nsetInterval(() => {}, 1_000)\n`,
+    )
+    await chmod(join(directory, 'pi'), 0o755)
+    process.env.PATH = `${directory}${delimiter}${previousPath}`
+
+    const pi = new PiProcess(directory, 'session-id')
+    const exited = new Promise((resolve) => pi.once('exit', resolve))
+    await assert.rejects(pi.request({ type: 'get_state' }), SyntaxError)
+    await exited
+  },
+)
 
 test(
   'Windows tree escalation terminates a child and its descendant',

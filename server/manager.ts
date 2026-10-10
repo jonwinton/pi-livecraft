@@ -59,15 +59,16 @@ const server = createServer((socket) => {
   clients.add(socket)
   socket.setNoDelay(true)
   const decoder = new JsonLineDecoder((value) => void handleRequest(socket, value))
-  socket.on('data', (chunk) => {
+  const read = (decode: () => void): void => {
     try {
-      decoder.push(chunk)
+      decode()
     } catch (error) {
       respond(socket, { kind: 'response', id: '', ok: false, error: errorMessage(error) })
       socket.destroy()
     }
-  })
-  socket.on('end', () => decoder.end())
+  }
+  socket.on('data', (chunk) => read(() => decoder.push(chunk)))
+  socket.on('end', () => read(() => decoder.end()))
   socket.on('close', () => clients.delete(socket))
   socket.on('error', () => clients.delete(socket))
 })

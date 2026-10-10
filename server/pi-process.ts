@@ -91,14 +91,18 @@ export class PiProcess extends EventEmitter {
       (value) => this.#receive(value),
       MAX_SESSION_RECORD_SIZE,
     )
-    this.child.stdout.on('data', (chunk: Buffer) => {
+    // A bad record leaves the stream unusable: end the process rather than keep a session that
+    // never answers, and never let a decoding error escape an event handler and crash the manager.
+    const read = (decode: () => void): void => {
       try {
-        decoder.push(chunk)
+        decode()
       } catch (error) {
         this.#fail(error)
+        void this.terminate()
       }
-    })
-    this.child.stdout.on('end', () => decoder.end())
+    }
+    this.child.stdout.on('data', (chunk: Buffer) => read(() => decoder.push(chunk)))
+    this.child.stdout.on('end', () => read(() => decoder.end()))
     this.child.stderr.on('data', (chunk: Buffer) => {
       this.#stderr = `${this.#stderr}${chunk.toString('utf8')}`.slice(-8_192)
     })
