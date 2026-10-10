@@ -167,13 +167,15 @@ async function refreshSessionActivity(): Promise<boolean> {
   const managedSessions = [...sessions.values()].filter(({ summary, switching }) =>
     summary.status !== 'exited' && !switching
   )
-  const activity = await Promise.all(managedSessions.map(async (session) => {
+  // One unresponsive or exiting Pi must not fail the listing for every other session.
+  const activity = await Promise.allSettled(managedSessions.map(async (session) => {
     const running = piHasActiveWork(await requestPi(session, { type: 'get_state' }, 5_000))
     if (running) markSessionRunning(session)
     else markSessionIdle(session)
     return running || session.pendingUi.size > 0
   }))
-  return activity.some(Boolean)
+  // An unknown state counts as active so a guarded restart stays blocked.
+  return activity.some((result) => result.status === 'rejected' || result.value)
 }
 
 function piHasActiveWork(state: JsonObject): boolean {

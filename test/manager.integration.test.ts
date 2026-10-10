@@ -543,6 +543,39 @@ test('closes a Pi session without deleting its manager summary', { timeout: 10_0
   }
 })
 
+test('lists sessions when one Pi cannot report its state', { timeout: 10_000 }, async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'pi-manager-'))
+  const port = 45_000 + (process.pid % 10_000)
+  await writeFakePi(directory)
+  const manager = spawn(process.execPath, ['server/manager.ts'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      PATH: `${fakePiBin(directory)}${delimiter}${process.env.PATH}`,
+      PI_LIVECRAFT_MANAGER_PORT: String(port),
+    },
+    stdio: 'ignore',
+  })
+  const client = await connectManager(port)
+  try {
+    const healthy = await client.request('create', { cwd: process.cwd() })
+    const broken = await client.request('create', { cwd: process.cwd() })
+    const failed = await client.request('command', {
+      sessionId: sessionId(broken),
+      command: { type: 'fail_state_test' },
+    })
+    assert.equal(failed.ok, true)
+    const listed = await client.request('list', {})
+    assert.equal(listed.ok, true)
+    assert.equal(sessionStatus(listed, sessionId(healthy)), 'idle')
+    assert.equal(sessionStatus(listed, sessionId(broken)), 'idle')
+  } finally {
+    client.close()
+    await stopProcess(manager)
+    await rm(directory, { force: true, recursive: true })
+  }
+})
+
 test('renames a persisted session through Pi RPC', { timeout: 10_000 }, async () => {
   const directory = await mkdtemp(join(tmpdir(), 'pi-manager-'))
   const port = 45_000 + (process.pid % 10_000)
@@ -736,6 +769,7 @@ if (isolated) {
 const emitStartupEvent = ${emitStartupEvent}
 const emitSwitchEvent = ${emitSwitchEvent}
 let streaming = false
+let failState = false
 readline.createInterface({ input: process.stdin }).on('line', (line) => {
   const command = JSON.parse(line)
   if (command.type === 'quit_test') process.exit(0)
@@ -769,6 +803,15 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
   if (!isolated && command.type === 'set_session_name') {
     if (command.name !== 'Renamed session') throw new Error('Unexpected session name')
     console.log(JSON.stringify({ type: 'response', id: command.id, success: true, data: {} }))
+    return
+  }
+  if (!isolated && command.type === 'fail_state_test') {
+    failState = true
+    console.log(JSON.stringify({ type: 'response', id: command.id, success: true, data: {} }))
+    return
+  }
+  if (failState && command.type === 'get_state') {
+    console.log(JSON.stringify({ type: 'response', id: command.id, success: false, error: 'State unavailable' }))
     return
   }
   if (!isolated && command.type === 'hold_test') {
