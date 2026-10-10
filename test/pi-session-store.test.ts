@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, realpath, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, realpath, utimes, writeFile } from 'node:fs/promises'
 import { realpathSync } from 'node:fs'
 import { tmpdir as osTmpdir } from 'node:os'
 import { join, sep } from 'node:path'
@@ -163,6 +163,19 @@ test('reads the newest entry of a large session file even when it exceeds one ta
   assert.equal(recent[0].name, 'Big session')
   // updatedAt reflects the final entry's timestamp; if it were ignored, this would fall back to 09:00.
   assert.equal(recent[0].updatedAt, Date.parse('2026-07-19T11:00:00.000Z'))
+})
+
+test('finds a workspace session behind more than one batch of newer sessions elsewhere', async () => {
+  const { directory, workspace } = await fixture()
+  const other = await mkdtemp(join(tmpdir(), 'pi-other-workspace-'))
+  await writeSession(join(directory, 'target.jsonl'), workspace, 'target', 'Target session')
+  await utimes(join(directory, 'target.jsonl'), new Date(0), new Date(0))
+  for (let index = 0; index < 101; index += 1) {
+    await writeSession(join(directory, `other-${index}.jsonl`), other, `other-${index}`, 'Other')
+  }
+
+  const recent = await listRecentPiSessions(workspace, directory)
+  assert.deepEqual(recent.map(({ id }) => id), ['target'])
 })
 
 async function writeSession(

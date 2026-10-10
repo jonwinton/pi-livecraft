@@ -28,6 +28,7 @@ interface PiSessionHeader {
 const MAX_SESSIONS = 30
 const CANDIDATE_BUFFER = 100
 const HEAD_CHUNK_BYTES = 64 * 1024
+const HEADER_PROBE_BYTES = 16 * 1024
 const TAIL_CHUNK_BYTES = 64 * 1024
 const TAIL_SCAN_BUDGET = 2 * 1024 * 1024
 
@@ -37,21 +38,36 @@ export async function listRecentPiSessions(
   directory = sessionDirectory,
 ): Promise<RecentSession[]> {
   const paths = await listSessionFiles(directory)
-
-  // stat is cheap, readFile is expensive: read only the most recent candidates
-  const withMtime = await Promise.all(
-    paths.map(async (path) => ({ path, mtime: (await stat(path)).mtimeMs })),
-  )
-  const candidates = withMtime
+  // A file may disappear between listing and stat; skip it rather than fail the whole list.
+  const files = (await Promise.all(paths.map(async (path) => {
+    try {
+      return [{ path, mtime: (await stat(path)).mtimeMs }]
+    } catch {
+      return []
+    }
+  })))
+    .flat()
     .sort((a, b) => b.mtime - a.mtime)
-    .slice(0, CANDIDATE_BUFFER)
 
-  const sessions = await Promise.all(
-    candidates.map(({ path, mtime }) => readPiSession(path, mtime)),
-  )
+  // Every workspace shares one store, so a workspace's sessions may be far down the newest list.
+  // Match cheap headers in batches, and read full metadata only for this workspace's files.
+  const sessions: RecentSession[] = []
+  for (
+    let index = 0;
+    index < files.length && sessions.length < MAX_SESSIONS;
+    index += CANDIDATE_BUFFER
+  ) {
+    const batch = files.slice(index, index + CANDIDATE_BUFFER)
+    const cwds = await Promise.all(batch.map(({ path }) => readHeaderCwd(path)))
+    const matches = await Promise.all(
+      batch.flatMap(({ path, mtime }, batchIndex) =>
+        cwds[batchIndex] === cwd ? [readPiSession(path, mtime)] : []
+      ),
+    )
+    sessions.push(...matches.filter((session): session is RecentSession => session?.cwd === cwd))
+  }
 
   return sessions
-    .filter((session): session is RecentSession => session?.cwd === cwd)
     .sort((left, right) => right.updatedAt - left.updatedAt)
     .slice(0, MAX_SESSIONS)
 }
@@ -170,6 +186,22 @@ async function readSessionLines(path: string): Promise<string[]> {
       scanned += chunkSize
     }
     return (head.subarray(0, headBytes).toString('utf8') + tail).split('\n')
+  } finally {
+    await handle?.close().catch(() => undefined)
+  }
+}
+
+/** Reads only the header line to learn which canonical workspace a session belongs to. */
+async function readHeaderCwd(path: string): Promise<string | null> {
+  let handle: FileHandle | undefined
+  try {
+    handle = await open(path, 'r')
+    const buffer = Buffer.alloc(HEADER_PROBE_BYTES)
+    const { bytesRead } = await handle.read(buffer, 0, HEADER_PROBE_BYTES, 0)
+    const header = parseHeader(buffer.subarray(0, bytesRead).toString('utf8').split('\n')[0])
+    return header ? await realpath(header.cwd) : null
+  } catch {
+    return null
   } finally {
     await handle?.close().catch(() => undefined)
   }
