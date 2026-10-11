@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFile as execFileCallback } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { realpathSync } from 'node:fs'
 import { tmpdir as osTmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -307,6 +307,37 @@ test('treats a discarded filename literally rather than as a pathspec pattern', 
 
     await discardFileChanges(directory, '*.ts')
     assert.deepEqual((await getGitSnapshot(directory)).files.map(({ path }) => path), ['keep.ts'])
+  } finally {
+    await rm(directory, { force: true, recursive: true })
+  }
+})
+
+test('does not run repository-configured helpers while reading status or diffs', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'pi-livecraft-git-'))
+  try {
+    await execFile('git', ['init', '--quiet'], { cwd: directory })
+    await execFile('git', ['config', 'user.email', 'test@example.com'], { cwd: directory })
+    await execFile('git', ['config', 'user.name', 'Test User'], { cwd: directory })
+    await writeFile(join(directory, '.gitattributes'), '*.txt diff=helper\n')
+    await writeFile(join(directory, 'file.txt'), 'first\n')
+    await execFile('git', ['add', '.'], { cwd: directory })
+    await execFile('git', ['commit', '--quiet', '-m', 'Initial'], { cwd: directory })
+    const helper = join(directory, '.git', 'helper.sh')
+    await writeFile(helper, `#!/bin/sh\necho "$0 $*" >> "${join(directory, '.git', 'ran.log')}"\n`)
+    await chmod(helper, 0o755)
+    for (const key of ['core.fsmonitor', 'diff.external', 'diff.helper.textconv']) {
+      await execFile('git', ['config', key, helper], { cwd: directory })
+    }
+    await writeFile(join(directory, 'file.txt'), 'changed\n')
+
+    const snapshot = await getGitSnapshot(directory)
+    const { diff } = await getGitFileDiff(directory, 'file.txt')
+
+    assert.deepEqual(snapshot.files, [
+      { path: 'file.txt', status: 'modified', additions: 1, deletions: 1 },
+    ])
+    assert.match(diff, /^-first\n\+changed$/m)
+    await assert.rejects(readFile(join(directory, '.git', 'ran.log'), 'utf8'), { code: 'ENOENT' })
   } finally {
     await rm(directory, { force: true, recursive: true })
   }
