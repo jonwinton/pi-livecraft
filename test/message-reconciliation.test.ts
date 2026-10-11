@@ -151,3 +151,21 @@ test('keeps an unmatched optimistic user message as a live entry', () => {
     { key: 'opt-1', source: 'live' },
   ])
 })
+
+test('keeps a repeated prompt live until Pi persists it', () => {
+  const earlier = { role: 'user', timestamp: 100, content: 'continue' }
+  const reply = { role: 'assistant', timestamp: 101, content: 'Réponse' }
+  const live = [{ id: 'opt-1', message: { role: 'user', timestamp: 200, content: 'continue' } }]
+  const keys = (history: typeof earlier[]) =>
+    conversationMessageEntries(history, live).map(({ key, source }) => ({ key, source }))
+  assert.deepEqual(keys([earlier, reply]), [
+    { key: 'history-100-0', source: 'history' },
+    { key: 'history-101-1', source: 'history' },
+    { key: 'opt-1', source: 'live' },
+  ])
+  assert.deepEqual(keys([earlier, reply, { role: 'user', timestamp: 205, content: 'continue' }]), [
+    { key: 'history-100-0', source: 'history' },
+    { key: 'history-101-1', source: 'history' },
+    { key: 'opt-1', source: 'history' },
+  ])
+})
