@@ -110,6 +110,7 @@ export function useConversationRuntime(
     if (!sessionId) {
       const current = snapshotRefreshRef.current
       if (current) current.cancelled = true
+      snapshotRefreshRef.current = undefined
       snapshotSessionIdRef.current = ''
       setSnapshot(emptySnapshot)
       setSnapshotSessionId('')
