@@ -58,7 +58,7 @@ All documentation in the project (except this README) is primarily meant to be r
 
 ## Quick start
 
-You need **Node.js 24+**, **npm**, and a configured **Pi**. Native Windows, Linux, and WSL are supported. On Windows, Pi itself requires Bash; Git for Windows is the simplest source, or configure `shellPath` in `~/.pi/agent/settings.json`. A global npm installation should expose `pi.cmd` through `PATH`; Livecraft resolves its package entry point and never sends Pi arguments through `cmd.exe`.
+You need **Node.js 24+**, **npm**, and a configured **Pi**. macOS, native Windows, Linux, and WSL are supported. On Windows, Pi itself requires Bash; Git for Windows is the simplest source, or configure `shellPath` in `~/.pi/agent/settings.json`. A global npm installation should expose `pi.cmd` through `PATH`; Livecraft resolves its package entry point and never sends Pi arguments through `cmd.exe`.
 
 **[Fork the repository](https://github.com/sebastienservouze/pi-livecraft/fork)**, then run:
 
