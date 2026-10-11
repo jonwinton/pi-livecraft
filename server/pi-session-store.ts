@@ -51,12 +51,11 @@ export async function listRecentPiSessions(
 
   // Every workspace shares one store, so a workspace's sessions may be far down the newest list.
   // Match cheap headers in batches, and read full metadata only for this workspace's files.
+  // Pi appends each message, so a file's activity is never newer than its mtime: once the list is
+  // full and its last entry is at least as new as every unread file, no unread file can rank in.
   const sessions: RecentSession[] = []
-  for (
-    let index = 0;
-    index < files.length && sessions.length < MAX_SESSIONS;
-    index += CANDIDATE_BUFFER
-  ) {
+  for (let index = 0; index < files.length; index += CANDIDATE_BUFFER) {
+    if ((sessions[MAX_SESSIONS - 1]?.updatedAt ?? -Infinity) >= files[index].mtime) break
     const batch = files.slice(index, index + CANDIDATE_BUFFER)
     const cwds = await Promise.all(batch.map(({ path }) => readHeaderCwd(path)))
     const matches = await Promise.all(
@@ -65,11 +64,10 @@ export async function listRecentPiSessions(
       ),
     )
     sessions.push(...matches.filter((session): session is RecentSession => session?.cwd === cwd))
+    sessions.sort((left, right) => right.updatedAt - left.updatedAt)
   }
 
-  return sessions
-    .sort((left, right) => right.updatedAt - left.updatedAt)
-    .slice(0, MAX_SESSIONS)
+  return sessions.slice(0, MAX_SESSIONS)
 }
 
 /** Verifies that a file belongs to the Pi session directory before loading its metadata. */
