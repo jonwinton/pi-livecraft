@@ -515,6 +515,8 @@ export const Composer = memo(function Composer({
           }
         }}
         onKeyDown={(event) => {
+          // Keys during IME composition belong to the input method, e.g. Enter confirms a candidate.
+          if (event.nativeEvent.isComposing) return
           if (slashOpen && filteredCommands.length > 0) {
             if (event.key === 'Escape') {
               event.preventDefault()
