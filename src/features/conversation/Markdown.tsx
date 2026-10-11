@@ -120,6 +120,15 @@ export const Markdown = memo(function Markdown(
       )}
       <ReactMarkdown
         components={{
+          // Loading a remote image would leak data an agent encodes into its URL; show a link.
+          img: ({ node: _node, ...image }) =>
+            typeof image.src === 'string' && /^(?:https?:)?\/\//i.test(image.src)
+              ? (
+                <a href={image.src} rel='noreferrer' target='_blank'>
+                  {image.alt || image.src}
+                </a>
+              )
+              : <img {...image} />,
           code: ({ children: code, className }) => (
             <MarkdownCode className={className}>{code}</MarkdownCode>
           ),

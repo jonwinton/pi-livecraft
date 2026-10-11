@@ -20,6 +20,13 @@ import {
   toolFilePath,
 } from './tool-presentation.ts'
 
+/**
+ * Blocks every network fetch from previewed HTML so it cannot load or beacon remote URLs.
+ * It is inserted after any doctype so the preview keeps standards mode.
+ */
+const htmlPreviewPolicy =
+  `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; font-src data:">`
+
 const LazyCodeHighlighter = lazy(() => import('./CodeHighlighter'))
 
 const lineNumberStyle: CSSProperties = {
@@ -137,7 +144,10 @@ export function ToolCallPreview({
             <iframe
               className='tool-call-html-preview'
               sandbox=''
-              srcDoc={stripScripts(content)}
+              srcDoc={stripScripts(content).replace(
+                /^\s*<!doctype[^>]*>|^/i,
+                (doctype) => `${doctype}${htmlPreviewPolicy}`,
+              )}
               title={`HTML preview of ${filePath ?? 'file'}`}
             />
           )
