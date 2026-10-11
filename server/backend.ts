@@ -267,8 +267,6 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     const template = typeof body.template === 'string' && body.template.trim()
       ? body.template
       : undefined
-    if (template !== undefined && template.length > 2000)
-      throw new HttpError(400, 'Terminal command template is too long')
     try {
       await openTerminalApplication(await resolveWorkingDirectory(body.cwd), template)
       sendJson(response, 200, { ok: true })

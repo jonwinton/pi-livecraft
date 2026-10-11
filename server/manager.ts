@@ -453,19 +453,22 @@ async function requestPi(
   }
 }
 
-/** Rewrites a draft in a disposable, tool-free Pi process without touching the active session. */
-async function improvePrompt(request: ManagerRequest): Promise<{ prompt: string; cost?: number }> {
-  if (
-    typeof request.sessionId !== 'string' || typeof request.prompt !== 'string' || !request
-      .prompt
-      .trim()
-    || request.prompt.length > 100_000
-  ) {
+/** Validates the shared isolated-prompt fields and resolves the session that supplies the cwd. */
+function isolatedPromptRequest(
+  request: ManagerRequest,
+): { session: ManagedSession; prompt: string } {
+  const prompt = typeof request.prompt === 'string' ? request.prompt.trim() : ''
+  if (typeof request.sessionId !== 'string' || !prompt || prompt.length > 100_000)
     throw new Error('Session id and a prompt between 1 and 100,000 characters are required')
-  }
   const session = sessions.get(request.sessionId)
   if (!session || session.summary.status === 'exited')
     throw new Error('Active Pi session is unavailable')
+  return { session, prompt }
+}
+
+/** Rewrites a draft in a disposable, tool-free Pi process without touching the active session. */
+async function improvePrompt(request: ManagerRequest): Promise<{ prompt: string; cost?: number }> {
+  const { session, prompt } = isolatedPromptRequest(request)
 
   const direction = typeof request.direction === 'string'
     ? improvementDirectionInstruction(request.direction)
@@ -479,7 +482,7 @@ async function improvePrompt(request: ManagerRequest): Promise<{ prompt: string;
     : ''
   const result = await runIsolatedPrompt({
     cwd: session.summary.cwd,
-    prompt: `<user_prompt>\n${request.prompt.trim()}\n</user_prompt>`,
+    prompt: `<user_prompt>\n${prompt}\n</user_prompt>`,
     systemPrompt: `${systemPrompt}\n\n${directionBlock}${projectMap}`,
     includeContextFiles: false,
   })
@@ -488,21 +491,11 @@ async function improvePrompt(request: ManagerRequest): Promise<{ prompt: string;
 
 /** Runs a prompt in an isolated, disposable Pi process with caller-controlled configuration. */
 async function runPrompt(request: ManagerRequest): Promise<{ text: string }> {
-  if (
-    typeof request.sessionId !== 'string' || typeof request.prompt !== 'string' || !request
-      .prompt
-      .trim()
-    || request.prompt.length > 100_000
-  ) {
-    throw new Error('Session id and a prompt between 1 and 100,000 characters are required')
-  }
-  const session = sessions.get(request.sessionId)
-  if (!session || session.summary.status === 'exited')
-    throw new Error('Active Pi session is unavailable')
+  const { session, prompt } = isolatedPromptRequest(request)
 
   const result = await runIsolatedPrompt({
     cwd: session.summary.cwd,
-    prompt: request.prompt.trim(),
+    prompt,
     systemPrompt: typeof request.systemPrompt === 'string' ? request.systemPrompt : undefined,
     thinkingLevel: typeof request.thinkingLevel === 'string' ? request.thinkingLevel : undefined,
     model: isModelOption(request.model) ? request.model : undefined,
