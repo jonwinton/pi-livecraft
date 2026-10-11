@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -44,5 +44,24 @@ test('saves project prompts in Pi’s conventional directory without overwriting
     )
   } finally {
     await rm(cwd, { recursive: true, force: true })
+  }
+})
+
+test('refuses to save a project prompt through a symlink that leaves the workspace', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'pi-livecraft-prompts-')))
+  const workspace = join(root, 'workspace')
+  const outside = join(root, 'outside')
+  try {
+    await mkdir(workspace)
+    await mkdir(outside)
+    await symlink(outside, join(workspace, '.pi'), 'dir')
+
+    await assert.rejects(
+      savePromptTemplate(workspace, 'project', 'escape', 'Content'),
+      /inside the working directory/,
+    )
+    assert.deepEqual(await readdir(outside), [])
+  } finally {
+    await rm(root, { force: true, recursive: true })
   }
 })
