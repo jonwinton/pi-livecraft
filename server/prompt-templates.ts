@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { JsonObject, PromptTemplate } from '../shared/types.ts'
@@ -45,6 +45,13 @@ export async function savePromptTemplate(
   const directory = scope === 'project'
     ? join(cwd, '.pi', 'prompts')
     : join(process.env.PI_CODING_AGENT_DIR ?? join(homedir(), '.pi', 'agent'), 'prompts')
+  // A repository can ship `.pi` as a symlink; following it would write outside the workspace.
+  if (scope === 'project') {
+    for (const path of [join(cwd, '.pi'), directory]) {
+      if ((await lstat(path).catch(() => null))?.isSymbolicLink())
+        throw new Error('Project prompts must be stored inside the working directory')
+    }
+  }
   await mkdir(directory, { recursive: true })
   await writeFile(join(directory, `${name}.md`), content, { encoding: 'utf8', flag: 'wx' })
   return { name, content, description: firstNonEmptyLine(content) }
