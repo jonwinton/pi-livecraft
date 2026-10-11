@@ -26,6 +26,21 @@ export function sidebarSessions(
     .sort((left, right) => right.updatedAt - left.updatedAt)
 }
 
+/** Lists manager ids of the visible sessions that are open in Pi, in sidebar order. */
+export function activeSidebarSessionIds(
+  sessions: SessionSummary[],
+  recentSessions: RecentSession[],
+  workspacePath: string,
+  sentSessions: RecentSession[] = [],
+): string[] {
+  return sidebarSessions(recentSessions, workspacePath, sentSessions).flatMap((recent) => {
+    const active = sessions.find((session) =>
+      session.sessionPath === recent.sessionPath && session.status !== 'exited'
+    )
+    return active ? [active.id] : []
+  })
+}
+
 /** Picks the next visible active session after closing the selected one. */
 export function nextActiveSessionId(
   closedSessionId: string,
@@ -34,14 +49,7 @@ export function nextActiveSessionId(
   workspacePath: string,
   sentSessions: RecentSession[] = [],
 ): string | null {
-  const activeIds = sidebarSessions(recentSessions, workspacePath, sentSessions).flatMap(
-    (recent) => {
-      const active = sessions.find((session) =>
-        session.sessionPath === recent.sessionPath && session.status !== 'exited'
-      )
-      return active ? [active.id] : []
-    },
-  )
+  const activeIds = activeSidebarSessionIds(sessions, recentSessions, workspacePath, sentSessions)
   const closedIndex = activeIds.indexOf(closedSessionId)
   return closedIndex >= 0
     ? activeIds[closedIndex + 1] ?? activeIds[closedIndex - 1] ?? null

@@ -50,7 +50,10 @@ import {
 import { RightSidebar } from './features/right-sidebar/RightSidebar.tsx'
 import { quotaProviderForModel } from './features/quotas/quota-display.ts'
 import { DirectoryPicker } from './features/workspace/DirectoryPicker.tsx'
-import { sidebarSessions, type PinnedSession } from './features/workspace/sidebar-sessions.ts'
+import {
+  activeSidebarSessionIds,
+  type PinnedSession,
+} from './features/workspace/sidebar-sessions.ts'
 import { useWorkspaceSessions } from './features/workspace/useWorkspaceSessions.ts'
 import { WorkspaceSidebar } from './features/workspace/WorkspaceSidebar.tsx'
 import {
@@ -948,10 +951,16 @@ function App() {
       return
     }
     if (id === 'next-session' || id === 'previous-session') {
-      const visible = sidebarSessions(recentSessions, workspacePath, sentSessions)
-      const currentIndex = visible.findIndex((session) => session.id === selectedId)
+      const visibleIds = activeSidebarSessionIds(
+        sessions,
+        recentSessions,
+        workspacePath,
+        sentSessions,
+      )
+      const currentIndex = visibleIds.indexOf(selectedId)
       const targetIndex = id === 'next-session' ? currentIndex + 1 : currentIndex - 1
-      if (targetIndex >= 0 && targetIndex < visible.length) setSelectedId(visible[targetIndex].id)
+      if (targetIndex >= 0 && targetIndex < visibleIds.length)
+        setSelectedId(visibleIds[targetIndex])
       return
     }
     if (id === 'toggle-conversation-view') {
@@ -974,6 +983,7 @@ function App() {
     selectWorkspace,
     selectedId,
     sentSessions,
+    sessions,
     analysisAvailable,
     setDirectoryPickerOpen,
     setSelectedId,
@@ -985,8 +995,11 @@ function App() {
   ])
 
   const paletteCommands: PaletteCommand[] = useMemo(() => {
-    const visibleIds = sidebarSessions(recentSessions, workspacePath, sentSessions).map((session) =>
-      session.id
+    const visibleIds = activeSidebarSessionIds(
+      sessions,
+      recentSessions,
+      workspacePath,
+      sentSessions,
     )
     const selectedIndex = selectedId ? visibleIds.indexOf(selectedId) : -1
     return commandDefinitions.map((definition) => {
@@ -1022,6 +1035,7 @@ function App() {
     selectedId,
     selectedSession,
     sentSessions,
+    sessions,
     analysisAvailable,
     shortcuts,
     workspacePath,
