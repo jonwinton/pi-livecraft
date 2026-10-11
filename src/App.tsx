@@ -1401,6 +1401,7 @@ function App() {
       )}
       {dialog && !questionnaire && (
         <ExtensionDialog
+          key={`${dialog.sessionId}:${String(dialog.request.id)}`}
           dialog={dialog}
           onClose={() => closeDialog(dialog)}
           onError={(cause) => showToast('error', messageOf(cause))}
