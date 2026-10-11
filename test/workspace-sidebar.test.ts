@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { nextActiveSessionId } from '../src/features/workspace/sidebar-sessions.ts'
+import {
+  activeSidebarSessionIds,
+  nextActiveSessionId,
+} from '../src/features/workspace/sidebar-sessions.ts'
 import {
   clampWorkspaceSidebarWidth,
   defaultWorkspaceSidebarWidth,
@@ -46,4 +49,34 @@ test('choisit la session active suivante après une fermeture', () => {
   }))
   assert.equal(nextActiveSessionId('closed', sessions, recentSessions, '/workspace'), 'next')
   assert.equal(nextActiveSessionId('next', sessions, recentSessions, '/workspace'), 'previous')
+})
+
+test('lists manager ids of open sidebar sessions rather than persisted ids', () => {
+  const recentSessions = [
+    { id: 'file-a', cwd: '/workspace', name: 'A', sessionPath: '/a.jsonl', updatedAt: 10 },
+    { id: 'file-b', cwd: '/workspace', name: 'B', sessionPath: '/b.jsonl', updatedAt: 20 },
+    { id: 'file-c', cwd: '/workspace', name: 'C', sessionPath: '/c.jsonl', updatedAt: 30 },
+  ]
+  const sessions = [
+    {
+      id: 'manager-a',
+      cwd: '/workspace',
+      name: 'A',
+      sessionPath: '/a.jsonl',
+      status: 'idle' as const,
+      pendingUi: [],
+    },
+    {
+      id: 'manager-b',
+      cwd: '/workspace',
+      name: 'B',
+      sessionPath: '/b.jsonl',
+      status: 'idle' as const,
+      pendingUi: [],
+    },
+  ]
+  assert.deepEqual(activeSidebarSessionIds(sessions, recentSessions, '/workspace'), [
+    'manager-b',
+    'manager-a',
+  ])
 })
