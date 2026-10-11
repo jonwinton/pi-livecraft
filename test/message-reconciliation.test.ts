@@ -3,6 +3,7 @@ import test from 'node:test'
 import {
   assistantTurnParts,
   conversationMessageEntries,
+  liveMessagesInHistory,
   sameAssistantMessage,
   sameMessage,
 } from '../src/features/conversation/message-reconciliation.ts'
@@ -150,6 +151,15 @@ test('keeps an unmatched optimistic user message as a live entry', () => {
     { key: 'history--0', source: 'history' },
     { key: 'opt-1', source: 'live' },
   ])
+})
+
+test('drops live messages that are absent from the active branch', () => {
+  const kept = { role: 'user', timestamp: 100, content: 'Kept' }
+  const live = [
+    { id: 'kept', message: { role: 'user', content: 'Kept' } },
+    { id: 'abandoned', message: { role: 'assistant', timestamp: 201, content: 'Abandoned' } },
+  ]
+  assert.deepEqual(liveMessagesInHistory([kept], live).map(({ id }) => id), ['kept'])
 })
 
 test('keeps a repeated prompt live until Pi persists it', () => {
