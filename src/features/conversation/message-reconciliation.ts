@@ -120,6 +120,18 @@ export function conversationMessageEntries(
   ]
 }
 
+/** Keeps the live messages that history contains, retaining their React identities. */
+export function liveMessagesInHistory(
+  historyMessages: JsonObject[],
+  liveMessages: LiveMessage[],
+): LiveMessage[] {
+  const persistedIds = new Set(
+    conversationMessageEntries(historyMessages, liveMessages)
+      .flatMap((entry) => entry.source === 'history' ? [entry.key] : []),
+  )
+  return liveMessages.filter(({ id }) => persistedIds.has(id))
+}
+
 /** Returns assistant content before the tool calls belonging to that message. */
 export function assistantTurnParts(message: JsonObject): AssistantTurnPart[] {
   return [

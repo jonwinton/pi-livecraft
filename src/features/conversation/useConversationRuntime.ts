@@ -8,7 +8,7 @@ import { isObject } from '../../../shared/is-object.ts'
 import type { JsonObject, SessionSnapshot } from '../../../shared/types.ts'
 import { activityForPiEvent, type Activity } from './activity.ts'
 import { advanceEventSequence } from './event-sequence.ts'
-import type { LiveMessage } from './message-reconciliation.ts'
+import { liveMessagesInHistory, type LiveMessage } from './message-reconciliation.ts'
 import {
   applyToolCallUpdate,
   applyToolExecutionUpdate,
@@ -159,6 +159,13 @@ export function useConversationRuntime(
                 liveEvent.data,
                 liveEvent.sequence,
               )
+            }
+          } else if (nextSnapshot.liveEvents.length === 0) {
+            // Without a turn in progress, history is the whole branch; anything else was abandoned.
+            const persisted = liveMessagesInHistory(nextSnapshot.messages, liveMessagesRef.current)
+            if (persisted.length !== liveMessagesRef.current.length) {
+              liveMessagesRef.current = persisted
+              setLiveMessages(persisted)
             }
           }
         } catch (cause) {
