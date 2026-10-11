@@ -84,6 +84,8 @@ export async function getGitFileDiff(
       throw new Error('This file cannot be displayed.')
     const result = await runGit(root, [
       'diff-tree',
+      '--no-ext-diff',
+      '--no-textconv',
       '--no-commit-id',
       '--root',
       '--first-parent',
@@ -100,10 +102,25 @@ export async function getGitFileDiff(
   if (!file || (file.status !== 'added' && file.status !== 'modified'))
     throw new Error('This file cannot be displayed.')
 
-  const trackedDiff = await runGit(root, ['diff', 'HEAD', '--', path], [0, 128])
+  const trackedDiff = await runGit(root, [
+    'diff',
+    '--no-ext-diff',
+    '--no-textconv',
+    'HEAD',
+    '--',
+    path,
+  ], [0, 128])
   if (trackedDiff.stdout) return { path, diff: trackedDiff.stdout }
 
-  const untrackedDiff = await runGit(root, ['diff', '--no-index', '--', '/dev/null', path], [
+  const untrackedDiff = await runGit(root, [
+    'diff',
+    '--no-ext-diff',
+    '--no-textconv',
+    '--no-index',
+    '--',
+    '/dev/null',
+    path,
+  ], [
     0,
     1,
   ])
@@ -363,7 +380,8 @@ async function runGit(
 ): Promise<GitCommandResult> {
   return new Promise((resolve, reject) => {
     // Repository filenames are data: never let `*`, `?`, or `:(magic)` widen a pathspec.
-    const process = spawn('git', ['--literal-pathspecs', ...args], {
+    // A repository's own config must not run a helper just because its state was read.
+    const process = spawn('git', ['--literal-pathspecs', '-c', 'core.fsmonitor=false', ...args], {
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
     })
