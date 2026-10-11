@@ -42,6 +42,8 @@ import type {
 import { isObject } from '../shared/is-object.ts'
 
 const host = '127.0.0.1'
+/** Outlasts the manager's five-minute isolated prompt plus process setup and result retrieval. */
+const isolatedPromptRequestTimeoutMs = 6 * 60_000
 const port = readPort('PI_LIVECRAFT_BACKEND_PORT', 43_121)
 const managerPort = readPort('PI_LIVECRAFT_MANAGER_PORT', 43_120)
 const manager = new ManagerClient(host, managerPort)
@@ -454,7 +456,7 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
       sessionId: decodeURIComponent(promptImprovementMatch[1]),
       prompt: body.prompt,
       direction: body.direction,
-    }, 3 * 60_000)
+    }, isolatedPromptRequestTimeoutMs)
     sendJson(response, 200, data)
     return
   }
@@ -481,7 +483,7 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
       includeContextFiles: typeof body.includeContextFiles === 'boolean'
         ? body.includeContextFiles
         : undefined,
-    }, 5 * 60_000)
+    }, isolatedPromptRequestTimeoutMs)
     sendJson(response, 200, data)
     return
   }
