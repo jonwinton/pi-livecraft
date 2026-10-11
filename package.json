@@ -42,36 +42,35 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@radix-ui/react-select": "^2.3.3",
-    "diff": "^8.0.4",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
+    "@radix-ui/react-select": "^2.3.8",
+    "diff": "^9.0.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "react-markdown": "^10.1.0",
     "react-material-icon-theme": "^1.2.0",
-    "react-syntax-highlighter": "^16.1.1",
+    "react-syntax-highlighter": "^16.1.2",
     "remark-gfm": "^4.0.1",
-    "yaml": "^2.9.0"
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
-    "@types/diff": "^7.0.2",
-    "@types/node": "^24.13.3",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
+    "@types/node": "^24.19.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@types/react-syntax-highlighter": "^15.5.13",
-    "@vitejs/plugin-react": "^6.0.3",
-    "concurrently": "^10.0.3",
-    "dprint": "^0.55.2",
+    "@vitejs/plugin-react": "^6.1.2",
+    "concurrently": "^10.0.6",
+    "dprint": "^0.61.1",
     "husky": "^9.1.7",
-    "lint-staged": "^17.2.0",
-    "oxlint": "^1.71.0",
-    "typescript": "~6.0.2",
-    "vite": "^8.1.1"
+    "lint-staged": "^17.6.0",
+    "oxlint": "^1.87.0",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.4"
   },
   "lint-staged": {
     "*.{ts,tsx,css,html}": "dprint fmt",
     "!(*-lock).json": "dprint fmt"
   },
   "allowScripts": {
-    "dprint@0.55.2": true
+    "dprint@0.61.1": true
   }
 }
