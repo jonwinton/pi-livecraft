@@ -13,6 +13,7 @@ test('detects Linux and WSL from the runtime environment', () => {
   assert.equal(getDesktopPlatform('linux', {}), 'linux')
   assert.equal(getDesktopPlatform('linux', { WSL_DISTRO_NAME: 'Ubuntu' }), 'wsl')
   assert.equal(getDesktopPlatform('win32', {}), 'windows')
+  assert.equal(getDesktopPlatform('darwin', {}), 'macos')
 })
 
 test('reads the current WSL distribution name when available', () => {
@@ -95,6 +96,24 @@ test('opens Windows directories through visible Explorer with native argument da
   assert.equal(call?.options?.stdio, 'ignore')
   assert.equal(call?.options?.windowsHide, false)
   assert.equal(unrefCalled, true)
+})
+
+test('opens macOS files and folders with open and the path as argument data', async () => {
+  let call: { command: string; args: string[] } | undefined
+  await openPath(
+    '/Users/ada/hostile & ü',
+    'macos',
+    ((command: string, args: string[]) => {
+      call = { command, args }
+      const child = new EventEmitter() as EventEmitter & { unref: () => void }
+      child.unref = () => undefined
+      queueMicrotask(() => child.emit('spawn'))
+      return child as never
+    }) as never,
+  )
+
+  assert.deepEqual(call, { command: 'open', args: ['/Users/ada/hostile & ü'] })
+  assert.equal(await externalWorkspacePath('/Users/ada/project', 'macos'), '/Users/ada/project')
 })
 
 test('converts WSL workspace paths through the injected converter', async () => {

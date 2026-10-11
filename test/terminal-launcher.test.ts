@@ -80,6 +80,17 @@ test('uses the platform terminal defaults', () => {
   )
 })
 
+test('opens Terminal.app at the workspace on macOS', () => {
+  assert.deepEqual(defaultTerminalInvocation('/Users/ada/my project', 'macos'), {
+    command: 'open',
+    args: ['-a', 'Terminal', '/Users/ada/my project'],
+  })
+  assert.deepEqual(
+    parseTerminalTemplate('open -a iTerm {cwd}', '/Users/ada/my project', 'macos'),
+    { command: 'open', args: ['-a', 'iTerm', '/Users/ada/my project'] },
+  )
+})
+
 test('uses Windows Terminal in a new native Windows window', () => {
   assert.deepEqual(defaultTerminalInvocation('C:\\hostile & ü', 'windows'), {
     command: 'wt.exe',
