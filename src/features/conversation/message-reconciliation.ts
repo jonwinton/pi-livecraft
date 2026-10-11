@@ -62,16 +62,15 @@ function assistantContentKey(message: JsonObject): string | null {
 
 /** Checks the non-content part of a match after both messages share an index key. */
 function sameIndexedMessage(history: JsonObject, live: JsonObject): boolean {
-  const timestamps = typeof history.timestamp === 'number' && typeof live.timestamp === 'number'
-    ? { history: history.timestamp, live: live.timestamp }
-    : undefined
+  const { timestamp: historyTime } = history
+  const { timestamp: liveTime } = live
+  const timed = typeof historyTime === 'number' && typeof liveTime === 'number'
   if (history.role === 'user' && live.role === 'user') {
     // Pi stamps a prompt after the browser sends it, so an older history entry is an earlier prompt.
-    return extractUserText(history) !== null
-      && !(timestamps && timestamps.history < timestamps.live)
+    return extractUserText(history) !== null && !(timed && historyTime < liveTime)
   }
   if (history.role !== 'assistant' || live.role !== 'assistant') return false
-  return !(timestamps && timestamps.history !== timestamps.live)
+  return !(timed && historyTime !== liveTime)
 }
 
 /** Matches messages so optimistic users reconcile with history and assistants retain their identity. */
