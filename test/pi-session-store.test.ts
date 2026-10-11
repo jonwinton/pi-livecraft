@@ -178,6 +178,33 @@ test('finds a workspace session behind more than one batch of newer sessions els
   assert.deepEqual(recent.map(({ id }) => id), ['target'])
 })
 
+test('keeps the newest message activity when renamed sessions have newer file times', async () => {
+  const { directory, workspace } = await fixture()
+  const other = await mkdtemp(join(tmpdir(), 'pi-other-workspace-'))
+  const renamedAt = new Date('2026-07-20T12:00:00.000Z')
+  for (let index = 0; index < 100; index += 1) {
+    const path = join(directory, `renamed-${index}.jsonl`)
+    // Renaming appends session info, so these files are newest on disk with old messages.
+    await writeSession(path, index < 30 ? workspace : other, `renamed-${index}`, 'Old')
+    await utimes(path, renamedAt, renamedAt)
+  }
+  const activePath = join(directory, 'active.jsonl')
+  await writeSession(
+    activePath,
+    workspace,
+    'active',
+    'Active',
+    undefined,
+    '2026-07-19T23:00:00.000Z',
+  )
+  const activeAt = new Date('2026-07-19T23:00:00.000Z')
+  await utimes(activePath, activeAt, activeAt)
+
+  const recent = await listRecentPiSessions(workspace, directory)
+  assert.equal(recent.length, 30)
+  assert.equal(recent[0].id, 'active')
+})
+
 async function writeSession(
   path: string,
   cwd: string,
