@@ -180,8 +180,12 @@ export const Composer = memo(function Composer({
   )
   const handlePromptOpenChange = useCallback(() => setOpenSelect(null), [])
 
+  // The counter outlives this per-session instance; only requests issued after mount are ours.
+  const handledSubmitRequest = useRef(submitRequest)
   useEffect(() => {
-    if (submitRequest > 0) formRef.current?.requestSubmit()
+    if (submitRequest === handledSubmitRequest.current) return
+    handledSubmitRequest.current = submitRequest
+    formRef.current?.requestSubmit()
   }, [submitRequest])
 
   useEffect(() => {
