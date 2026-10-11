@@ -362,7 +362,11 @@ async function runGit(
   allowedExitCodes = [0],
 ): Promise<GitCommandResult> {
   return new Promise((resolve, reject) => {
-    const process = spawn('git', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
+    // Repository filenames are data: never let `*`, `?`, or `:(magic)` widen a pathspec.
+    const process = spawn('git', ['--literal-pathspecs', ...args], {
+      cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
     let stdout = ''
     let stderr = ''
     process.stdout.on('data', (chunk: Buffer) => {

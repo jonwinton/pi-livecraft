@@ -298,6 +298,20 @@ test('discards untracked files in a repository without commits', async () => {
   }
 })
 
+test('treats a discarded filename literally rather than as a pathspec pattern', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'pi-livecraft-git-'))
+  try {
+    await execFile('git', ['init', '--quiet'], { cwd: directory })
+    await writeFile(join(directory, '*.ts'), 'pattern\n')
+    await writeFile(join(directory, 'keep.ts'), 'keep\n')
+
+    await discardFileChanges(directory, '*.ts')
+    assert.deepEqual((await getGitSnapshot(directory)).files.map(({ path }) => path), ['keep.ts'])
+  } finally {
+    await rm(directory, { force: true, recursive: true })
+  }
+})
+
 test('rejects commit without changes or message', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'pi-livecraft-git-'))
   try {
