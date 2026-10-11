@@ -14,7 +14,7 @@ import { reorderTodoItems, sortTodoItemsForDisplay } from './todo-order.ts'
 import { promptSessionTitle } from '../composer/prompt-title.ts'
 import { sessionIndicator } from '../workspace/session-indicator.ts'
 import { SessionStatusIndicator } from '../workspace/SessionStatusIndicator.tsx'
-import { cacheTodos, loadTodos } from './todo-cache.ts'
+import { cachedTodos, cacheTodos, loadTodos } from './todo-cache.ts'
 
 /** Displays and edits the persistent task list for the current workspace. */
 export function TodoWidget(
@@ -41,12 +41,12 @@ export function TodoWidget(
   },
 ) {
   const draftStorageKey = `pi-livecraft.todo-draft.${workspacePath}`
-  const [todos, setTodos] = useState<TodoItem[]>([])
+  // Null until this workspace's list loads, so a failed load cannot pose as an empty list.
+  const [todos, setTodos] = useState<TodoItem[] | null>(null)
   const [newText, setNewText] = useState(() => readDraft(draftStorageKey))
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingText, setEditingText] = useState('')
   const [reloadRequest, setReloadRequest] = useState(0)
-  const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [startingId, setStartingId] = useState<string | null>(null)
   const [draggedId, setDraggedId] = useState<string | null>(null)
@@ -66,9 +66,8 @@ export function TodoWidget(
   /** Reloads the list when the workspace changes and ignores stale responses. */
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
     setError('')
-    setTodos([])
+    setTodos(null)
     sessionNameSyncKey.current = ''
     todosWorkspace.current = null
     void loadTodos(workspacePath, reloadRequest > 0)
@@ -81,20 +80,24 @@ export function TodoWidget(
       .catch((cause) => {
         if (!cancelled) setError(messageOf(cause))
       })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
     return () => {
       cancelled = true
     }
   }, [onOpenCountChange, reloadRequest, workspacePath])
 
-  /** Persists a new list before replacing the visible state. */
-  const save = useCallback(async (nextTodos: TodoItem[]): Promise<boolean> => {
+  /**
+   * Persists an edit before replacing the visible state. The edit applies to the last list the
+   * server confirmed, not a render snapshot, so writes issued after an await keep newer tasks.
+   */
+  const save = useCallback(async (
+    update: (current: TodoItem[]) => TodoItem[],
+  ): Promise<boolean> => {
+    const current = cachedTodos(workspacePath)
+    if (!current) return false
     setBusy(true)
     setError('')
     try {
-      const savedTodos = await updateTodos(workspacePath, nextTodos)
+      const savedTodos = await updateTodos(workspacePath, update(current))
       cacheTodos(workspacePath, savedTodos)
       setTodos(savedTodos)
       onOpenCountChange(openCount(savedTodos))
@@ -109,7 +112,7 @@ export function TodoWidget(
 
   /** Persists current session names when a linked session is renamed elsewhere. */
   useEffect(() => {
-    if (busy || todosWorkspace.current !== workspacePath) return
+    if (busy || !todos || todosWorkspace.current !== workspacePath) return
     const nextTodos = todos.map((todo) => {
       if (!todo.session) return todo
       const name = sessionNameForTodo(todo, sessions)
@@ -123,7 +126,7 @@ export function TodoWidget(
     )
     if (syncKey === sessionNameSyncKey.current) return
     sessionNameSyncKey.current = syncKey
-    void save(nextTodos)
+    void save(() => nextTodos)
   }, [busy, save, sessions, todos, workspacePath])
 
   /** Persists the draft so a page reload cannot discard typed text. */
@@ -142,7 +145,13 @@ export function TodoWidget(
     event.preventDefault()
     const text = newText.trim()
     if (!text) return
-    if (await save([...todos, { id: crypto.randomUUID(), text, completed: false }])) {
+    if (
+      await save((current) => [...current, {
+        id: crypto.randomUUID(),
+        text,
+        completed: false,
+      }])
+    ) {
       setDraft('')
       textareaRef.current?.focus()
     }
@@ -154,7 +163,9 @@ export function TodoWidget(
     if (!text || busy) return
     if (
       text === todo.text
-      || await save(todos.map((item) => item.id === todo.id ? { ...item, text } : item))
+      || await save((current) =>
+        current.map((item) => item.id === todo.id ? { ...item, text } : item)
+      )
     ) {
       setEditingId(null)
       setEditingText('')
@@ -176,7 +187,7 @@ export function TodoWidget(
 
   /** Permanently removes a task without interrupting the flow with a confirmation. */
   async function removeTodo(todo: TodoItem): Promise<void> {
-    await save(todos.filter((item) => item.id !== todo.id))
+    await save((current) => current.filter((item) => item.id !== todo.id))
   }
 
   /** Starts a drag while retaining the order to restore if saving fails. */
@@ -222,7 +233,7 @@ export function TodoWidget(
     dragTodos.current = null
     dragOriginalTodos.current = null
     dragMoved.current = false
-    if (!shouldSave || !nextTodos || !previousTodos || await save(nextTodos)) return
+    if (!shouldSave || !nextTodos || !previousTodos || await save(() => nextTodos)) return
     setTodos(previousTodos)
     onOpenCountChange(openCount(previousTodos))
   }
@@ -250,7 +261,9 @@ export function TodoWidget(
       if (summary) {
         const link = sessionLink(summary)
         if (link)
-          await save(todos.map((item) => item.id === todo.id ? { ...item, session: link } : item))
+          await save((current) =>
+            current.map((item) => item.id === todo.id ? { ...item, session: link } : item)
+          )
       }
     } finally {
       setStartingId(null)
@@ -265,15 +278,18 @@ export function TodoWidget(
       if (summary) {
         const link = sessionLink(summary, promptSessionTitle(todo.text))
         if (link)
-          await save(todos.map((item) => item.id === todo.id ? { ...item, session: link } : item))
+          await save((current) =>
+            current.map((item) => item.id === todo.id ? { ...item, session: link } : item)
+          )
       }
     } finally {
       setStartingId(null)
     }
   }
 
-  const visibleTodos = sortTodoItemsForDisplay(todos.filter((todo) => !todo.completed))
-  const remaining = openCount(todos)
+  const loading = todos === null && !error
+  const visibleTodos = sortTodoItemsForDisplay((todos ?? []).filter((todo) => !todo.completed))
+  const remaining = openCount(todos ?? [])
 
   return (
     <>
@@ -366,11 +382,13 @@ export function TodoWidget(
                           checked={todo.completed}
                           disabled={busy}
                           onChange={() =>
-                            void save(todos.map((item) =>
-                              item.id === todo.id
-                                ? { ...item, completed: !item.completed }
-                                : item
-                            ))}
+                            void save((current) =>
+                              current.map((item) =>
+                                item.id === todo.id
+                                  ? { ...item, completed: !item.completed }
+                                  : item
+                              )
+                            )}
                           type='checkbox'
                         />
                         {editingId === todo.id
@@ -471,7 +489,7 @@ export function TodoWidget(
         <form className='todo-add' onSubmit={(event) => void addTodo(event)}>
           <textarea
             aria-label='New task'
-            disabled={busy || loading}
+            disabled={busy || todos === null}
             maxLength={500}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
@@ -488,7 +506,7 @@ export function TodoWidget(
           <Tooltip label='Add'>
             <button
               aria-label='Add task'
-              disabled={busy || loading || !newText.trim()}
+              disabled={busy || todos === null || !newText.trim()}
               type='submit'
             >
               <svg aria-hidden='true' viewBox='0 0 16 16'>

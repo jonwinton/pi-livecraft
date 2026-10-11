@@ -27,6 +27,11 @@ export function loadTodos(cwd: string, force = false): Promise<TodoItem[]> {
   return request
 }
 
+/** Returns the last list the server confirmed for a workspace, or undefined if none loaded. */
+export function cachedTodos(cwd: string): TodoItem[] | undefined {
+  return todoCache.get(cwd)?.todos
+}
+
 /** Updates the shared snapshot after a successful todo write. */
 export function cacheTodos(cwd: string, todos: TodoItem[]): void {
   todoCache.set(cwd, { todos })
