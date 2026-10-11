@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -28,6 +28,7 @@ test('refreshes isolated credentials from the main Pi profile on every run', asy
 
   await mkdir(mainDir, { recursive: true })
   await writeFile(join(mainDir, 'auth.json'), '{"token":"old"}')
+  await chmod(join(mainDir, 'auth.json'), 0o644)
   await writeFile(join(mainDir, 'models.json'), '{}')
   await ensureIsolatedAgentDir()
   await writeFile(join(mainDir, 'auth.json'), '{"token":"rotated"}')
@@ -36,4 +37,8 @@ test('refreshes isolated credentials from the main Pi profile on every run', asy
 
   assert.equal(await readFile(join(isolatedDir, 'auth.json'), 'utf8'), '{"token":"rotated"}')
   await assert.rejects(readFile(join(isolatedDir, 'models.json')), { code: 'ENOENT' })
+  if (process.platform !== 'win32') {
+    assert.equal((await stat(isolatedDir)).mode & 0o777, 0o700)
+    assert.equal((await stat(join(isolatedDir, 'auth.json'))).mode & 0o777, 0o600)
+  }
 })

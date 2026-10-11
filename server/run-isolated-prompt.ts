@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { copyFile, mkdir, rename, rm } from 'node:fs/promises'
+import { chmod, copyFile, mkdir, rename, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { ISOLATED_AGENT_DIR, PiProcess } from './pi-process.ts'
@@ -17,7 +17,9 @@ const isolatedPromptTimeoutMs = 5 * 60_000
  * OAuth tokens and API keys in the main profile change over time.
  */
 export async function ensureIsolatedAgentDir(): Promise<void> {
-  await mkdir(ISOLATED_AGENT_DIR, { recursive: true })
+  // The profile holds copied credentials: keep it owner-only even if it already existed.
+  await mkdir(ISOLATED_AGENT_DIR, { recursive: true, mode: 0o700 })
+  await chmod(ISOLATED_AGENT_DIR, 0o700)
   const mainDir = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), '.pi', 'agent')
   await Promise.all(['auth.json', 'models.json'].map(async (file) => {
     const dest = join(ISOLATED_AGENT_DIR, file)
@@ -25,6 +27,7 @@ export async function ensureIsolatedAgentDir(): Promise<void> {
     const temporary = `${dest}.${randomUUID()}.tmp`
     try {
       await copyFile(join(mainDir, file), temporary)
+      await chmod(temporary, 0o600)
       await rename(temporary, dest)
     } catch (error) {
       await rm(temporary, { force: true })
