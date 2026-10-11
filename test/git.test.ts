@@ -286,6 +286,18 @@ test('diffs and discards root-relative paths from a workspace subdirectory', asy
   }
 })
 
+test('discards untracked files in a repository without commits', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'pi-livecraft-git-'))
+  try {
+    await execFile('git', ['init', '--quiet'], { cwd: directory })
+    await writeFile(join(directory, 'new.ts'), 'new\n')
+    await discardChanges(directory)
+    assert.deepEqual((await getGitSnapshot(directory)).files, [])
+  } finally {
+    await rm(directory, { force: true, recursive: true })
+  }
+})
+
 test('rejects commit without changes or message', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'pi-livecraft-git-'))
   try {

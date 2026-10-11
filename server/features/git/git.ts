@@ -230,13 +230,13 @@ export async function discardChanges(cwd: string): Promise<void> {
   const root = snapshot.root ?? cwd
   // On a branch with commits, restore index + working tree to HEAD.
   // On an unborn branch (no commits), remove everything from the index.
-  const branch = await runGit(root, ['rev-parse', '--verify', 'HEAD'], [0, 1])
+  const branch = await runGit(root, ['rev-parse', '--verify', '--quiet', 'HEAD'], [0, 1])
   if (branch.exitCode === 0) {
     await runGit(root, ['reset', '--hard', 'HEAD'])
   } else {
-    await runGit(root, ['rm', '-rf', '--cached', '.'])
+    await runGit(root, ['rm', '-rf', '--cached', '--ignore-unmatch', '.'])
   }
-  // Remove untracked files (including those in .gitignore'd dirs but not ignored files).
+  // Remove untracked files across the repository; ignored files are kept.
   await runGit(root, ['clean', '-fd'])
 }
 
