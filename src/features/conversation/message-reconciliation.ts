@@ -61,20 +61,24 @@ function assistantContentKey(message: JsonObject): string | null {
 }
 
 /** Checks the non-content part of a match after both messages share an index key. */
-function sameIndexedMessage(left: JsonObject, right: JsonObject): boolean {
-  if (left.role === 'user' && right.role === 'user') return extractUserText(left) !== null
-  if (left.role !== 'assistant' || right.role !== 'assistant') return false
-  return !(
-    typeof left.timestamp === 'number' && typeof right.timestamp === 'number'
-    && left.timestamp !== right.timestamp
-  )
+function sameIndexedMessage(history: JsonObject, live: JsonObject): boolean {
+  const timestamps = typeof history.timestamp === 'number' && typeof live.timestamp === 'number'
+    ? { history: history.timestamp, live: live.timestamp }
+    : undefined
+  if (history.role === 'user' && live.role === 'user') {
+    // Pi stamps a prompt after the browser sends it, so an older history entry is an earlier prompt.
+    return extractUserText(history) !== null
+      && !(timestamps && timestamps.history < timestamps.live)
+  }
+  if (history.role !== 'assistant' || live.role !== 'assistant') return false
+  return !(timestamps && timestamps.history !== timestamps.live)
 }
 
 /** Matches messages so optimistic users reconcile with history and assistants retain their identity. */
-export function sameMessage(left: JsonObject, right: JsonObject): boolean {
-  const leftKey = messageMatchKey(left)
-  return leftKey !== null && leftKey === messageMatchKey(right)
-    && sameIndexedMessage(left, right)
+export function sameMessage(history: JsonObject, live: JsonObject): boolean {
+  const historyKey = messageMatchKey(history)
+  return historyKey !== null && historyKey === messageMatchKey(live)
+    && sameIndexedMessage(history, live)
 }
 
 /** Merges history and streamed messages while retaining each streamed message's React identity. */
