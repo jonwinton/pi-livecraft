@@ -576,6 +576,41 @@ test('lists sessions when one Pi cannot report its state', { timeout: 10_000 }, 
   }
 })
 
+test('disconnects a client that stops reading events', { timeout: 20_000 }, async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'pi-manager-'))
+  const port = 45_000 + (process.pid % 10_000)
+  await writeFakePi(directory)
+  const manager = spawn(process.execPath, ['server/manager.ts'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      PATH: `${fakePiBin(directory)}${delimiter}${process.env.PATH}`,
+      PI_LIVECRAFT_MANAGER_PORT: String(port),
+    },
+    stdio: 'ignore',
+  })
+  const client = await connectManager(port)
+  const stalled = await connectWithRetry(port)
+  stalled.pause()
+  const stalledClosed = new Promise((resolve) => stalled.once('close', resolve))
+  try {
+    const created = await client.request('create', { cwd: process.cwd() })
+    const flooded = await client.request('command', {
+      sessionId: sessionId(created),
+      command: { type: 'flood_test' },
+    })
+    assert.equal(flooded.ok, true)
+    // A paused socket cannot observe its close; resume to drain and see whether it was dropped.
+    stalled.resume()
+    await stalledClosed
+  } finally {
+    stalled.destroy()
+    client.close()
+    await stopProcess(manager)
+    await rm(directory, { force: true, recursive: true })
+  }
+})
+
 test('renames a persisted session through Pi RPC', { timeout: 10_000 }, async () => {
   const directory = await mkdtemp(join(tmpdir(), 'pi-manager-'))
   const port = 45_000 + (process.pid % 10_000)
@@ -802,6 +837,13 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
   }
   if (!isolated && command.type === 'set_session_name') {
     if (command.name !== 'Renamed session') throw new Error('Unexpected session name')
+    console.log(JSON.stringify({ type: 'response', id: command.id, success: true, data: {} }))
+    return
+  }
+  if (!isolated && command.type === 'flood_test') {
+    const text = 'x'.repeat(64 * 1024)
+    for (let index = 0; index < 512; index += 1)
+      console.log(JSON.stringify({ type: 'tool_execution_update', toolCallId: 'flood', text }))
     console.log(JSON.stringify({ type: 'response', id: command.id, success: true, data: {} }))
     return
   }
