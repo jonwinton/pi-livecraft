@@ -51,6 +51,10 @@ test('détecte les conflits de raccourcis', () => {
   assert.deepEqual([...conflicts].sort(), ['abort', 'send'])
 })
 
+test('default shortcuts do not conflict', () => {
+  assert.deepEqual([...shortcutConflicts(defaultShortcuts)], [])
+})
+
 test('les nouvelles commandes de productivité sont reconnues par le registre', () => {
   const ids = [
     'open-directory-picker',
