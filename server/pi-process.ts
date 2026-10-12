@@ -103,6 +103,11 @@ export class PiProcess extends EventEmitter {
     }
     this.child.stdout.on('data', (chunk: Buffer) => read(() => decoder.push(chunk)))
     this.child.stdout.on('end', () => read(() => decoder.end()))
+    // A write after Pi closes its input fails asynchronously; unhandled, it would crash the manager.
+    this.child.stdin.on('error', (error) => {
+      this.#fail(error)
+      void this.terminate()
+    })
     this.child.stderr.on('data', (chunk: Buffer) => {
       this.#stderr = `${this.#stderr}${chunk.toString('utf8')}`.slice(-8_192)
     })
