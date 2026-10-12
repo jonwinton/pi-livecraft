@@ -289,6 +289,12 @@ function App() {
         const key = `${session.id}:${request.id}`
         if (agentResponsesSentRef.current.has(key)) continue
         agentResponsesSentRef.current.add(key)
+        // A selector Livecraft requested may arrive during the disconnect; keep its options.
+        if (agentOptionsLoadingRef.current[session.id]) {
+          const options = request.options.filter((o): o is string => typeof o === 'string')
+          setAgentOptions((current) => ({ ...current, [session.id]: options }))
+          setAgentOptionsLoading((current) => ({ ...current, [session.id]: false }))
+        }
         void sendPiCommand(session.id, {
           type: 'extension_ui_response',
           id: request.id,
