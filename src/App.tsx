@@ -366,10 +366,7 @@ function App() {
   const openPinnedSession = useCallback(
     async (session: PinnedSession): Promise<void> => {
       selectWorkspace(session.cwd)
-      await startWorkspaceSession(
-        () => openSession(session.cwd, session.sessionPath),
-        { refreshCwd: session.cwd },
-      )
+      await startWorkspaceSession(() => openSession(session.cwd, session.sessionPath))
     },
     [selectWorkspace, startWorkspaceSession],
   )

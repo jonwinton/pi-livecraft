@@ -31,7 +31,6 @@ interface WorkspaceSessionsOptions {
 interface StartSessionOptions {
   draftMessage?: string
   initialMessage?: string
-  refreshCwd?: string
 }
 
 const COMPLETED_SESSIONS_KEY = 'pi-livecraft.completed-sessions'
@@ -250,19 +249,23 @@ export function useWorkspaceSessions(
       start: () => Promise<SessionSummary>,
       options: StartSessionOptions = {},
     ): Promise<SessionSummary | null> => {
+      // Switching workspaces meanwhile supersedes selection; the session and its prompt still start.
+      const cwd = workspacePathRef.current
       creatingSessionRef.current = true
       setCreatingSession(true)
       setSelectedId('')
       try {
         const session = await start()
-        await refreshSessions(options.refreshCwd)
-        setSelectedId(session.id)
+        if (isCurrentWorkspace(cwd)) await refreshSessions(cwd)
+        if (isCurrentWorkspace(cwd)) setSelectedId(session.id)
         if (options.draftMessage) onDraftMessage(session.id, options.draftMessage)
         if (options.initialMessage) {
           await sendPiCommand(session.id, { type: 'prompt', message: options.initialMessage })
           nameSessionFromFirstPrompt(session, options.initialMessage)
-          await refreshSessions(options.refreshCwd)
-          onInitialMessageSent()
+          if (isCurrentWorkspace(cwd)) {
+            await refreshSessions(cwd)
+            onInitialMessageSent()
+          }
         }
         return session
       } catch (cause) {
@@ -273,7 +276,14 @@ export function useWorkspaceSessions(
         setCreatingSession(false)
       }
     },
-    [nameSessionFromFirstPrompt, onDraftMessage, onError, onInitialMessageSent, refreshSessions],
+    [
+      isCurrentWorkspace,
+      nameSessionFromFirstPrompt,
+      onDraftMessage,
+      onError,
+      onInitialMessageSent,
+      refreshSessions,
+    ],
   )
 
   const updateSession = useCallback(
