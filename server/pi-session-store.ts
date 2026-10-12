@@ -183,7 +183,11 @@ async function readSessionLines(path: string): Promise<string[]> {
       tail = chunk.subarray(0, bytesRead).toString('utf8') + tail
       scanned += chunkSize
     }
-    return (head.subarray(0, headBytes).toString('utf8') + tail).split('\n')
+    const headText = head.subarray(0, headBytes).toString('utf8')
+    // Joining non-adjacent regions would glue the head's cut-off line onto the tail's first line.
+    return position === HEAD_CHUNK_BYTES
+      ? (headText + tail).split('\n')
+      : [...headText.split('\n'), ...tail.split('\n')]
   } finally {
     await handle?.close().catch(() => undefined)
   }
