@@ -40,6 +40,12 @@ const improveOptions = [
   { label: 'Precise', value: 'precise' },
 ]
 
+/**
+ * Pasted images by session, kept in memory across Composer remounts. Unlike text they stay out of
+ * localStorage: four base64 images per session would quickly exhaust its quota.
+ */
+const sessionImages = new Map<string, ComposerImage[]>()
+
 /** Provides user input and session commands while reflecting the current Pi state. */
 export const Composer = memo(function Composer({
   session,
@@ -108,7 +114,7 @@ export const Composer = memo(function Composer({
 }) {
   const draftStorageKey = `pi-livecraft.composer-draft.${session.id}`
   const [message, setMessage] = useState(() => readComposerDraft(draftStorageKey))
-  const [images, setImages] = useState<ComposerImage[]>([])
+  const [images, setImages] = useState(() => sessionImages.get(session.id) ?? [])
   const [preparingImages, setPreparingImages] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [improving, setImproving] = useState(false)
@@ -227,6 +233,11 @@ export const Composer = memo(function Composer({
       textarea.setSelectionRange(textarea.value.length, textarea.value.length)
     }
   }, [])
+
+  useEffect(() => {
+    if (images.length > 0) sessionImages.set(session.id, images)
+    else sessionImages.delete(session.id)
+  }, [images, session.id])
 
   /** Persists the draft to storage, tolerating unavailable storage (private browsing). */
   const persistDraft = useCallback((text: string): void => {

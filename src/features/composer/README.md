@@ -33,8 +33,10 @@ All data arrives through props. The Composer never calls the backend directly.
 
 ## Internal state
 
-- `message`, `images` — the draft; persisted to `localStorage` per session
+- `message` — the text draft; persisted to `localStorage` per session
   (`pi-livecraft.composer-draft.<sessionId>`).
+- `images` — pasted attachments; kept in memory per session, so they survive session switches
+  but not a page reload.
 - `slashOpen`, `slashFilter`, `slashIndex` — slash-command popover.
 - `openSelect` — which dropdown (agent/model/thinking) is open.
 - `behavior` — `steer` vs `followUp`, only visible while Pi is running.
@@ -54,5 +56,5 @@ current draft through `onSavePrompt()`.
 
 ## Draft persistence
 
-Each session has one draft in `localStorage`. Drafts are cleared on successful
-send and restored on failure.
+Each session has one text draft in `localStorage` and its pasted images in memory. Both are
+cleared on successful send and restored on failure.
