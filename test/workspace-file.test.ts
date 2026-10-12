@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
-import { realpath } from 'node:fs/promises'
-import { relative } from 'node:path'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, relative } from 'node:path'
 import test from 'node:test'
 import {
   readWorkspaceFile,
@@ -36,4 +37,18 @@ test('allows opening an absolute file outside the workspace without widening rea
       return true
     },
   )
+})
+
+test('reads a workspace file whose name starts with two dots but rejects parent paths', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'pi-livecraft-file-')))
+  const workspace = join(root, 'workspace')
+  try {
+    await mkdir(workspace)
+    await writeFile(join(workspace, '..notes.txt'), 'notes\n')
+    await writeFile(join(root, 'secret.txt'), 'secret\n')
+    assert.equal((await readWorkspaceFile(workspace, '..notes.txt')).content, 'notes\n')
+    await assert.rejects(readWorkspaceFile(workspace, '../secret.txt'), { status: 403 })
+  } finally {
+    await rm(root, { force: true, recursive: true })
+  }
 })
