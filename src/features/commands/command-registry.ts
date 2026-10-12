@@ -85,17 +85,26 @@ export function rightWidgetFromCommand(commandId: CommandId): RightWidget | null
   return rightWidgetDefinitions.find(({ id }) => rightWidgetCommandId(id) === commandId)?.id ?? null
 }
 
-/** Preserves the exact modifiers pressed while producing a stable shortcut value. */
+/**
+ * Preserves the exact modifiers pressed while producing a stable shortcut value.
+ * macOS Option turns letters and digits into symbols or dead keys (Option+K is `˚`), so a
+ * non-ASCII Alt key falls back to its physical key; printable layout keys such as AZERTY `&` stay.
+ */
 export function shortcutFromEvent(
   event: {
     key: string
+    code?: string
     metaKey?: boolean
     ctrlKey?: boolean
     altKey?: boolean
     shiftKey?: boolean
   },
 ): string {
-  const key = event.key.toLowerCase() === ' ' ? 'space' : event.key.toLowerCase()
+  const physical = event.altKey && !/^[!-~]$/.test(event.key)
+    ? /^(?:Key([A-Z])|Digit(\d))$/.exec(event.code ?? '')
+    : null
+  const pressed = physical ? physical[1] ?? physical[2] : event.key
+  const key = pressed === ' ' ? 'space' : pressed.toLowerCase()
   if (['alt', 'control', 'meta', 'shift'].includes(key)) return ''
   const modifiers = [
     event.ctrlKey ? 'ctrl' : '',
