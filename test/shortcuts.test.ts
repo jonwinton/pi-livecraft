@@ -24,6 +24,16 @@ test('conserve exactement les touches d’un raccourci', () => {
   assert.equal(migrateLegacyShortcut('mod+k', 'meta'), 'meta+k')
 })
 
+test('normalizes macOS Option shortcuts from the physical key', () => {
+  assert.equal(shortcutFromEvent({ key: '˚', code: 'KeyK', altKey: true }), 'alt+k')
+  assert.equal(shortcutFromEvent({ key: 'Dead', code: 'KeyN', altKey: true }), 'alt+n')
+  assert.equal(shortcutFromEvent({ key: '¡', code: 'Digit1', altKey: true }), 'alt+1')
+  assert.equal(shortcutFromEvent({ key: '&', code: 'Digit1', altKey: true }), 'alt+&')
+  assert.equal(shortcutFromEvent({ key: 'a', code: 'KeyQ', altKey: true }), 'alt+a')
+  assert.equal(shortcutFromEvent({ key: 'ArrowRight', code: 'ArrowRight', altKey: true }), 'alt+arrowright')
+  assert.equal(shortcutFromEvent({ key: 'é', code: 'Digit2' }), 'é')
+})
+
 test('expose automatiquement chaque widget dans le registre de commandes', () => {
   for (const widget of rightWidgetDefinitions) {
     const commandId = rightWidgetCommandId(widget.id)
