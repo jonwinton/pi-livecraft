@@ -1,3 +1,5 @@
+import { readLocalStorage, writeLocalStorage } from './local-storage.ts'
+
 /** Editable colour variables exposed in the theme editor. Order matters for the UI. */
 export const THEME_VARIABLES = [
   'canvas',
@@ -129,11 +131,6 @@ export const BUILT_IN_THEMES: ThemePreset[] = [
 
 const STORAGE_KEY = 'pi-livecraft.themes'
 const LEGACY_THEME_KEY = 'pi-livecraft.theme'
-type ThemeStorage = {
-  getItem: (key: string) => string | null
-  setItem: (key: string, value: string) => void
-  removeItem: (key: string) => void
-}
 
 type ThemeStyle = {
   setProperty: (name: string, value: string) => void
@@ -158,11 +155,6 @@ const DERIVED_THEME_VARIABLES = [
   'violet',
   'violet-soft',
 ] as const
-
-/** Returns browser storage without requiring DOM types in the pure test build. */
-function themeStorage(): ThemeStorage | undefined {
-  return (globalThis as typeof globalThis & { localStorage?: ThemeStorage }).localStorage
-}
 
 // ── Validation & migration ─────────────────────────────────────────
 
@@ -279,11 +271,9 @@ export function parseThemePreferences(raw: unknown, legacyValue: string | null):
 /** Reads preferences from localStorage, migrating the legacy key on first access. */
 export function readThemePreferences(): ThemePreferences {
   try {
-    const storage = themeStorage()
-    if (!storage) return { active: 'light', themes: [] }
-    const raw: unknown = JSON.parse(storage.getItem(STORAGE_KEY) ?? 'null')
-    const legacy = storage.getItem(LEGACY_THEME_KEY)
-    if (legacy !== null) storage.removeItem(LEGACY_THEME_KEY)
+    const raw: unknown = JSON.parse(readLocalStorage(STORAGE_KEY) ?? 'null')
+    const legacy = readLocalStorage(LEGACY_THEME_KEY)
+    if (legacy !== null) writeLocalStorage(LEGACY_THEME_KEY, null)
     return parseThemePreferences(raw, legacy)
   } catch {
     return { active: 'light', themes: [] }
@@ -292,7 +282,7 @@ export function readThemePreferences(): ThemePreferences {
 
 /** Persists preferences to localStorage. */
 export function persistThemePreferences(prefs: ThemePreferences): void {
-  themeStorage()?.setItem(STORAGE_KEY, JSON.stringify(prefs))
+  writeLocalStorage(STORAGE_KEY, JSON.stringify(prefs))
 }
 
 // ── Domain queries ─────────────────────────────────────────────────

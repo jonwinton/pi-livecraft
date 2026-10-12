@@ -100,16 +100,16 @@ The `TabPanel` component handles `role="tabpanel"`, `aria-labelledby`, and the `
 
 ### Step 6: Persist the value (if needed)
 
-Settings values live in `localStorage` under the `pi-livecraft.` prefix. Add a line to your `App.tsx` callback:
+Settings values live in `localStorage` under the `pi-livecraft.` prefix. Add a line to your `App.tsx` callback, using `writeLocalStorage` from `src/features/settings/local-storage.ts`:
 
 ```ts
 onMyFeatureChange={(value) => {
   setMyFeature(value)
-  window.localStorage.setItem('pi-livecraft.my-feature', value)
+  writeLocalStorage('pi-livecraft.my-feature', value)
 }}
 ```
 
-When reading the value at startup, tolerate missing or malformed data so a bad preference cannot prevent startup.
+Read the value at startup with `readLocalStorage`, which returns `null` when storage is blocked; full or blocked storage then costs only persistence. Tolerate missing or malformed data so a bad preference cannot prevent startup.
 
 ### Step 7: Validate
 

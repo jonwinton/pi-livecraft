@@ -10,6 +10,7 @@ import {
 import type { JsonObject, RecentSession, SessionSummary } from '../../../shared/types.ts'
 import { isObject } from '../../../shared/is-object.ts'
 import { promptSessionTitle } from '../composer/prompt-title.ts'
+import { readLocalStorage, writeLocalStorage } from '../settings/local-storage.ts'
 import { recentWorkspaces } from './recent-workspaces.ts'
 import {
   nextActiveSessionId,
@@ -51,11 +52,11 @@ export function useWorkspaceSessions(
   const [pinnedSessions, setPinnedSessions] = useState<PinnedSession[]>(readPinnedSessions)
   const [isRefreshingSessions, setIsRefreshingSessions] = useState(true)
   const [workspacePath, setWorkspacePath] = useState(() =>
-    window.localStorage.getItem('pi-livecraft.workspace-path') ?? '.'
+    readLocalStorage('pi-livecraft.workspace-path') ?? '.'
   )
   const [recentWorkspacePaths, setRecentWorkspacePaths] = useState(() =>
     recentWorkspaces(
-      window.localStorage.getItem('pi-livecraft.workspace-path') ?? '.',
+      readLocalStorage('pi-livecraft.workspace-path') ?? '.',
       readRecentWorkspaces(),
     )
   )
@@ -79,11 +80,11 @@ export function useWorkspaceSessions(
   selectedIdRef.current = selectedId
 
   useEffect(() => {
-    if (window.localStorage.getItem('pi-livecraft.workspace-path') !== null) return
+    if (readLocalStorage('pi-livecraft.workspace-path') !== null) return
     let active = true
     void listDirectories('.')
       .then(({ path }) => {
-        if (!active || window.localStorage.getItem('pi-livecraft.workspace-path') !== null) return
+        if (!active || readLocalStorage('pi-livecraft.workspace-path') !== null) return
         workspacePathRef.current = path
         setWorkspacePath(path)
         setRecentWorkspacePaths(recentWorkspaces(path, readRecentWorkspaces()))
@@ -95,8 +96,7 @@ export function useWorkspaceSessions(
   }, [])
 
   useEffect(() => {
-    if (selectedId) window.localStorage.setItem('pi-livecraft.selected-session', selectedId)
-    else window.localStorage.removeItem('pi-livecraft.selected-session')
+    writeLocalStorage('pi-livecraft.selected-session', selectedId || null)
     setCompletedSessionIds((current) => {
       const sessionKey = sessionsRef
         .current
@@ -184,9 +184,9 @@ export function useWorkspaceSessions(
 
   /** Selects a workspace, optionally preserving an explicit session over automatic selection. */
   const selectWorkspace = useCallback((path: string, targetSessionId?: string): void => {
-    window.localStorage.setItem('pi-livecraft.workspace-path', path)
+    writeLocalStorage('pi-livecraft.workspace-path', path)
     const nextRecentWorkspacePaths = recentWorkspaces(path, recentWorkspacePaths)
-    window.localStorage.setItem(
+    writeLocalStorage(
       'pi-livecraft.recent-workspace-paths',
       JSON.stringify(nextRecentWorkspacePaths),
     )
@@ -440,7 +440,7 @@ export function useWorkspaceSessions(
 function readRecentWorkspaces(): string[] {
   try {
     const value: unknown = JSON.parse(
-      window.localStorage.getItem('pi-livecraft.recent-workspace-paths') ?? '[]',
+      readLocalStorage('pi-livecraft.recent-workspace-paths') ?? '[]',
     )
     return Array.isArray(value)
       ? value.filter((path): path is string => typeof path === 'string')
@@ -453,7 +453,7 @@ function readRecentWorkspaces(): string[] {
 /** Restores pinned session metadata persisted across app restarts. */
 function readPinnedSessions(): PinnedSession[] {
   try {
-    const stored = window.localStorage.getItem(PINNED_SESSIONS_KEY)
+    const stored = readLocalStorage(PINNED_SESSIONS_KEY)
     if (!stored) return []
     const parsed: unknown = JSON.parse(stored)
     if (!Array.isArray(parsed)) return []
@@ -481,11 +481,7 @@ function readPinnedSessions(): PinnedSession[] {
 
 /** Persists pinned session metadata so pins survive page and app restarts. */
 function writePinnedSessions(sessions: readonly PinnedSession[]): void {
-  try {
-    window.localStorage.setItem(PINNED_SESSIONS_KEY, JSON.stringify(sessions))
-  } catch {
-    // localStorage may be unavailable
-  }
+  writeLocalStorage(PINNED_SESSIONS_KEY, JSON.stringify(sessions))
 }
 
 /** Restores completed-session identifiers persisted across same-tab refreshes. */

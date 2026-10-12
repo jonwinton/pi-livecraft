@@ -71,6 +71,7 @@ import {
   shortcutFromEvent,
   type CommandId,
 } from './features/commands/command-registry.ts'
+import { readLocalStorage, writeLocalStorage } from './features/settings/local-storage.ts'
 import { SettingsPanel } from './features/settings/SettingsPanel.tsx'
 import { ManagerRuntimeNotice } from './features/manager/ManagerRuntimeNotice.tsx'
 import {
@@ -126,11 +127,11 @@ function App() {
     canRestart: false,
   })
   const [conversationView, setConversationView] = useState<ConversationView>(() => {
-    const stored = window.localStorage.getItem('pi-livecraft.conversation-view')
+    const stored = readLocalStorage('pi-livecraft.conversation-view')
     if (stored === 'detailed' || stored === 'simple-expanded') return 'detailed'
     if (stored === 'semi-detailed') return 'semi-detailed'
     if (stored === 'simple') return 'simple'
-    return window.localStorage.getItem('pi-livecraft.detailed-view') === 'false'
+    return readLocalStorage('pi-livecraft.detailed-view') === 'false'
       ? 'simple'
       : 'detailed'
   })
@@ -149,11 +150,11 @@ function App() {
 
   // Workspace tools and sidebars
   const [workspaceSidebarWidth, setWorkspaceSidebarWidth] = useState(() =>
-    readWorkspaceSidebarWidth(window.localStorage.getItem('pi-livecraft.workspace-sidebar-width'))
+    readWorkspaceSidebarWidth(readLocalStorage('pi-livecraft.workspace-sidebar-width'))
   )
   const [workspaceSidebarCollapsed, setWorkspaceSidebarCollapsed] = useState(() =>
     readWorkspaceSidebarCollapsed(
-      window.localStorage.getItem('pi-livecraft.workspace-sidebar-collapsed'),
+      readLocalStorage('pi-livecraft.workspace-sidebar-collapsed'),
     )
   )
   const [gitSnapshot, setGitSnapshot] = useState<GitSnapshot | null>(null)
@@ -163,9 +164,8 @@ function App() {
   )
   const [rightSidebarWidth, setRightSidebarWidth] = useState(() =>
     readRightSidebarWidth(
-      window.localStorage.getItem('pi-livecraft.right-sidebar-width') ?? window
-        .localStorage
-        .getItem('pi-livecraft.git-sidebar-width'),
+      readLocalStorage('pi-livecraft.right-sidebar-width')
+        ?? readLocalStorage('pi-livecraft.git-sidebar-width'),
     )
   )
 
@@ -194,7 +194,7 @@ function App() {
   const [terminalCommand, setTerminalCommand] = useState(() => readTerminalCommand())
 
   // Workspace and session synchronization
-  const selectedIdRef = useRef(window.localStorage.getItem('pi-livecraft.selected-session') ?? '')
+  const selectedIdRef = useRef(readLocalStorage('pi-livecraft.selected-session') ?? '')
   const replayPiEventRef = useRef<
     (sessionId: string, event: JsonObject, sequence?: number) => void
   >(() => undefined)
@@ -420,13 +420,13 @@ function App() {
   // Sidebar preferences
   const updateWorkspaceSidebarWidth = useCallback((width: number) => {
     const nextWidth = clampWorkspaceSidebarWidth(width)
-    window.localStorage.setItem('pi-livecraft.workspace-sidebar-width', String(nextWidth))
+    writeLocalStorage('pi-livecraft.workspace-sidebar-width', String(nextWidth))
     setWorkspaceSidebarWidth(nextWidth)
   }, [])
 
   const toggleWorkspaceSidebar = useCallback(() => {
     const nextCollapsed = !workspaceSidebarCollapsed
-    window.localStorage.setItem(
+    writeLocalStorage(
       'pi-livecraft.workspace-sidebar-collapsed',
       String(nextCollapsed),
     )
@@ -435,12 +435,12 @@ function App() {
 
   const updateRightSidebarWidth = useCallback((width: number) => {
     const nextWidth = clampRightSidebarWidth(width)
-    window.localStorage.setItem('pi-livecraft.right-sidebar-width', String(nextWidth))
+    writeLocalStorage('pi-livecraft.right-sidebar-width', String(nextWidth))
     setRightSidebarWidth(nextWidth)
   }, [])
 
   const openRightWidget = useCallback((widget: RightWidget) => {
-    window.localStorage.setItem('pi-livecraft.right-sidebar-widget', widget)
+    writeLocalStorage('pi-livecraft.right-sidebar-widget', widget)
     setActiveRightWidget(widget)
   }, [])
 
@@ -969,7 +969,7 @@ function App() {
     if (id === 'toggle-conversation-view') {
       setConversationView((current) => {
         const next = nextConversationView(current)
-        window.localStorage.setItem('pi-livecraft.conversation-view', next)
+        writeLocalStorage('pi-livecraft.conversation-view', next)
         return next
       })
       return
@@ -1075,7 +1075,7 @@ function App() {
   const navigateToAnalysisTarget = useCallback((target: SessionAnalysisTarget): void => {
     if (target.kind === 'tool' || target.kind === 'turn') {
       setConversationView('detailed')
-      window.localStorage.setItem('pi-livecraft.conversation-view', 'detailed')
+      writeLocalStorage('pi-livecraft.conversation-view', 'detailed')
     }
     setConversationNavigation((current) => ({ id: (current?.id ?? 0) + 1, target }))
   }, [])
@@ -1206,7 +1206,7 @@ function App() {
                       onClick={() =>
                         setConversationView((current) => {
                           const next = nextConversationView(current)
-                          window.localStorage.setItem('pi-livecraft.conversation-view', next)
+                          writeLocalStorage('pi-livecraft.conversation-view', next)
                           return next
                         })}
                       type='button'
@@ -1233,7 +1233,7 @@ function App() {
                             key={view}
                             onClick={() => {
                               setConversationView(view)
-                              window.localStorage.setItem('pi-livecraft.conversation-view', view)
+                              writeLocalStorage('pi-livecraft.conversation-view', view)
                             }}
                             type='button'
                           >
@@ -1387,7 +1387,7 @@ function App() {
         onWidgetSelect={(widget) =>
           setActiveRightWidget((current) => {
             const next = current === widget ? null : widget
-            window.localStorage.setItem('pi-livecraft.right-sidebar-widget', next ?? 'none')
+            writeLocalStorage('pi-livecraft.right-sidebar-widget', next ?? 'none')
             return next
           })}
       />
@@ -1440,11 +1440,11 @@ function App() {
           onChange={(id, shortcut) => {
             const next = { ...shortcuts, [id]: shortcut }
             setShortcuts(next)
-            window.localStorage.setItem('pi-livecraft.shortcuts', JSON.stringify(next))
+            writeLocalStorage('pi-livecraft.shortcuts', JSON.stringify(next))
           }}
           onTerminalCommandChange={(value) => {
             setTerminalCommand(value)
-            window.localStorage.setItem('pi-livecraft.terminal-command', value)
+            writeLocalStorage('pi-livecraft.terminal-command', value)
           }}
           onSelectTheme={selectTheme}
           onDuplicateTheme={duplicateActiveTheme}
@@ -1454,7 +1454,7 @@ function App() {
           onResetTheme={resetSelectedTheme}
           onReset={() => {
             setShortcuts(defaultShortcuts)
-            window.localStorage.setItem('pi-livecraft.shortcuts', JSON.stringify(defaultShortcuts))
+            writeLocalStorage('pi-livecraft.shortcuts', JSON.stringify(defaultShortcuts))
           }}
           onClose={() => setSettingsOpen(false)}
         />
@@ -1467,7 +1467,7 @@ function App() {
 function readShortcuts(): Partial<Record<CommandId, string>> {
   try {
     const value: unknown = JSON.parse(
-      window.localStorage.getItem('pi-livecraft.shortcuts') ?? 'null',
+      readLocalStorage('pi-livecraft.shortcuts') ?? 'null',
     )
     if (!isObject(value)) return defaultShortcuts
     const primaryModifier = navigator.platform.toLowerCase().includes('mac') ? 'meta' : 'ctrl'
@@ -1487,16 +1487,16 @@ function readShortcuts(): Partial<Record<CommandId, string>> {
 }
 
 function readTerminalCommand(): string {
-  const stored = window.localStorage.getItem('pi-livecraft.terminal-command')
+  const stored = readLocalStorage('pi-livecraft.terminal-command')
   return stored && stored.trim() && stored.includes('{cwd}') ? stored : ''
 }
 
 /** Restores the last-selected right sidebar widget, falling back to git when not collapsed. */
 function readActiveRightWidget(): RightWidget | null {
-  const stored = window.localStorage.getItem('pi-livecraft.right-sidebar-widget')
+  const stored = readLocalStorage('pi-livecraft.right-sidebar-widget')
   if (isRightWidget(stored)) return stored
   if (stored === 'none') return null
-  return window.localStorage.getItem('pi-livecraft.git-sidebar-collapsed') === 'true' ? null : 'git'
+  return readLocalStorage('pi-livecraft.git-sidebar-collapsed') === 'true' ? null : 'git'
 }
 
 function isManagerRuntimeStatus(value: unknown): value is ManagerRuntimeStatus {
