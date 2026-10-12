@@ -32,26 +32,25 @@ export async function getGitSnapshot(cwd: string): Promise<GitSnapshot> {
 
   const changes = parseGitStatus(status.stdout)
   const counts = mergeNumstats(unstaged.stdout, staged.stdout)
-  await Promise.all(
-    changes.filter((change) => change.status === 'added' && !counts.has(change.path)).map(
-      async (change) => {
-        const result = await runGit(root, [
-          'diff',
-          '--no-index',
-          '--numstat',
-          '-z',
-          '--',
-          '/dev/null',
-          change.path,
-        ], [0, 1])
-        const [count] = parseNumstat(result.stdout)
-        if (count)
-          counts.set(change.path, {
-            additions: count.additions,
-            deletions: count.deletions,
-          })
-      },
-    ),
+  await forEachLimited(
+    changes.filter((change) => change.status === 'added' && !counts.has(change.path)),
+    async (change) => {
+      const result = await runGit(root, [
+        'diff',
+        '--no-index',
+        '--numstat',
+        '-z',
+        '--',
+        '/dev/null',
+        change.path,
+      ], [0, 1])
+      const [count] = parseNumstat(result.stdout)
+      if (count)
+        counts.set(change.path, {
+          additions: count.additions,
+          deletions: count.deletions,
+        })
+    },
   )
 
   const commits = upstream.exitCode === 0 ? await unpushedCommits(root) : []
@@ -140,7 +139,7 @@ async function unpushedCommits(cwd: string): Promise<GitCommit[]> {
     commits.push({ hash, subject, files: [] })
   }
 
-  await Promise.all(commits.map(async (commit) => {
+  await forEachLimited(commits, async (commit) => {
     const [status, stats] = await Promise.all([
       runGit(cwd, [
         'diff-tree',
@@ -168,7 +167,7 @@ async function unpushedCommits(cwd: string): Promise<GitCommit[]> {
       const count = counts.get(change.path)
       return { ...change, additions: count?.additions ?? null, deletions: count?.deletions ?? null }
     })
-  }))
+  })
 
   return commits
 }
@@ -373,6 +372,14 @@ function numberOrNull(value: string): number | null {
   return Number.isNaN(number) ? null : number
 }
 
+/** Each Git child holds three pipes; a small pool keeps large worktrees within open-file limits. */
+async function forEachLimited<T>(items: T[], task: (item: T) => Promise<void>): Promise<void> {
+  let next = 0
+  await Promise.all(Array.from({ length: Math.min(8, items.length) }, async () => {
+    while (next < items.length) await task(items[next++])
+  }))
+}
+
 async function runGit(
   cwd: string,
   args: string[],
@@ -385,15 +392,16 @@ async function runGit(
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
     })
+    // Attach first: a failed spawn (e.g. EMFILE) has no pipes and reports only through `error`.
+    process.once('error', reject)
     let stdout = ''
     let stderr = ''
-    process.stdout.on('data', (chunk: Buffer) => {
+    process.stdout?.on('data', (chunk: Buffer) => {
       stdout += chunk.toString('utf8')
     })
-    process.stderr.on('data', (chunk: Buffer) => {
+    process.stderr?.on('data', (chunk: Buffer) => {
       stderr += chunk.toString('utf8')
     })
-    process.once('error', reject)
     process.once('close', (exitCode) => {
       const result = { exitCode: exitCode ?? 1, stdout, stderr }
       if (allowedExitCodes.includes(result.exitCode)) resolve(result)
