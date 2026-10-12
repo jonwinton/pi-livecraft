@@ -31,6 +31,29 @@ test(
 )
 
 test(
+  'rejects pending requests without crashing when Pi exits during a buffered write',
+  { skip: process.platform === 'win32', timeout: 10_000 },
+  async (t) => {
+    const directory = await mkdtemp(join(tmpdir(), 'pi-process-'))
+    const previousPath = process.env.PATH
+    t.after(async () => {
+      process.env.PATH = previousPath
+      await rm(directory, { force: true, recursive: true })
+    })
+    // Pi never reads its input, so a large record stays buffered until Pi exits and the pipe breaks.
+    await writeFile(join(directory, 'pi'), `#!/usr/bin/env node\nsetTimeout(() => {}, 300)\n`)
+    await chmod(join(directory, 'pi'), 0o755)
+    process.env.PATH = `${directory}${delimiter}${previousPath}`
+
+    const pi = new PiProcess(directory, 'session-id')
+    const exited = new Promise((resolve) => pi.once('exit', resolve))
+    await assert.rejects(pi.request({ type: 'prompt', message: 'x'.repeat(4 * 1024 * 1024) }))
+    await exited
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  },
+)
+
+test(
   'Windows tree escalation terminates a child and its descendant',
   { skip: process.platform !== 'win32', timeout: 10_000 },
   async (t) => {
