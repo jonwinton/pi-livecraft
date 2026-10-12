@@ -4,6 +4,8 @@ const DEFAULT_MAX_RECORD_SIZE = 4 * 1024 * 1024
 /** Pi returns a complete session history in one JSONL record; keep that path bounded separately. */
 // ponytail: 64 MiB bounds local RPC buffering; chunk get_entries if larger histories become common.
 export const MAX_SESSION_RECORD_SIZE = 64 * 1024 * 1024
+/** Unread event bytes allowed per stream consumer before it is disconnected to recover by resync. */
+export const MAX_BUFFERED_EVENT_BYTES = 16 * 1024 * 1024
 
 /**
  * Decodes a strict JSONL stream without treating Unicode separators as line

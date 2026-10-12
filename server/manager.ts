@@ -8,7 +8,7 @@
 import { randomUUID } from 'node:crypto'
 import { realpath, stat } from 'node:fs/promises'
 import { createServer, type Socket } from 'node:net'
-import { JsonLineDecoder, encodeJsonLine } from './jsonl.ts'
+import { JsonLineDecoder, MAX_BUFFERED_EVENT_BYTES, encodeJsonLine } from './jsonl.ts'
 import { PiProcess, terminateAllPiProcesses } from './pi-process.ts'
 import {
   generateProjectMap,
@@ -605,7 +605,9 @@ function isBlockingUiRequest(event: JsonObject): boolean {
 function broadcast(event: ManagerEvent): void {
   const line = encodeJsonLine(event)
   for (const client of clients) {
-    if (client.writable) client.write(line)
+    // A client that stops reading would otherwise buffer every later event in memory.
+    if (client.writableLength > MAX_BUFFERED_EVENT_BYTES) client.destroy()
+    else if (client.writable) client.write(line)
   }
 }
 

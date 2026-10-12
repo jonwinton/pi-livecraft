@@ -3,6 +3,7 @@ import { readdir, realpath, stat } from 'node:fs/promises'
 import { dirname, extname, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { MAX_BUFFERED_EVENT_BYTES } from './jsonl.ts'
 import { ManagerClient } from './manager-client.ts'
 import { ManagerRuntimeMonitor } from './manager-runtime-monitor.ts'
 import { listRecentPiSessions, loadPiSession } from './pi-session-store.ts'
@@ -601,7 +602,11 @@ async function serveStatic(
 
 function broadcast(event: unknown): void {
   const frame = `data: ${JSON.stringify(event)}\n\n`
-  for (const client of eventClients) client.write(frame)
+  for (const client of eventClients) {
+    // A stalled tab would otherwise buffer every event; EventSource reconnects and resyncs.
+    if (client.writableLength > MAX_BUFFERED_EVENT_BYTES) client.destroy()
+    else client.write(frame)
+  }
 }
 
 function sendJson(response: ServerResponse, status: number, value: unknown): void {
