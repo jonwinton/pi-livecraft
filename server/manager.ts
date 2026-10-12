@@ -31,6 +31,9 @@ const minimumOpenSessionsPerWorkspace = 3
 const idleReuseAfterMs = readDuration('PI_LIVECRAFT_IDLE_REUSE_AFTER_MS', 3 * 60_000)
 const clients = new Set<Socket>()
 const sessions = new Map<string, ManagedSession>()
+/** Summaries of exited sessions, oldest first, so the UI can show them without retaining processes. */
+const exitedSessions = new Map<string, SessionSummary>()
+const maxExitedSessions = 50
 const openingSessions = new Map<string, Promise<SessionSummary>>()
 const restartExitCode = readRestartExitCode()
 const supervised = process.env.PI_LIVECRAFT_MANAGER_SUPERVISED === '1'
@@ -157,10 +160,13 @@ async function handleRequest(socket: Socket, value: unknown): Promise<void> {
 }
 
 function listSessions(): SessionSummary[] {
-  return [...sessions.values()].map(({ summary, pendingUi }) => ({
-    ...summary,
-    pendingUi: [...pendingUi.values()],
-  }))
+  return [
+    ...[...sessions.values()].map(({ summary, pendingUi }) => ({
+      ...summary,
+      pendingUi: [...pendingUi.values()],
+    })),
+    ...exitedSessions.values(),
+  ]
 }
 
 /** Reconciles cached session activity with Pi's live state before reporting or acting on it. */
@@ -245,7 +251,9 @@ async function openSession(request: ManagerRequest): Promise<SessionSummary> {
       ...existing.summary,
       pendingUi: [...existing.pendingUi.values()],
     }
-  if (existing?.summary.status === 'exited') sessions.delete(existing.summary.id)
+  for (const [id, summary] of exitedSessions) {
+    if (summary.sessionPath === sessionPath) exitedSessions.delete(id)
+  }
 
   const operation = (async (): Promise<SessionSummary> => {
     const summary: SessionSummary = {
@@ -274,6 +282,7 @@ async function openSession(request: ManagerRequest): Promise<SessionSummary> {
 async function closeSession(request: ManagerRequest): Promise<{ closed: true }> {
   if (typeof request.sessionId !== 'string') throw new Error('Session id is required')
   const session = sessions.get(request.sessionId)
+  if (!session && exitedSessions.has(request.sessionId)) return { closed: true }
   if (!session) throw new Error('Unknown session')
   if (session.summary.status === 'exited') return { closed: true }
 
@@ -345,6 +354,12 @@ async function startSession(summary: SessionSummary): Promise<void> {
   pi.on('exit', (detail: unknown) => {
     if (session.summary.status === 'exited') return
     session.summary.status = 'exited'
+    if (sessions.get(session.summary.id) === session) {
+      sessions.delete(session.summary.id)
+      exitedSessions.set(session.summary.id, { ...session.summary, pendingUi: [] })
+      const oldest = exitedSessions.keys().next().value
+      if (exitedSessions.size > maxExitedSessions && oldest) exitedSessions.delete(oldest)
+    }
     broadcast({
       kind: 'event',
       event: 'session_exited',
@@ -522,6 +537,7 @@ async function sendCommand(request: ManagerRequest): Promise<JsonObject> {
     throw new Error('Session id and Pi command are required')
   }
   const session = sessions.get(request.sessionId)
+  if (!session && exitedSessions.has(request.sessionId)) throw new Error('Pi session has exited')
   if (!session) throw new Error('Unknown session')
   if (session.summary.status === 'exited') throw new Error('Pi session has exited')
   if (session.switching && request.command.type !== 'extension_ui_response')
