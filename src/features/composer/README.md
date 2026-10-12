@@ -39,7 +39,7 @@ All data arrives through props. The Composer never calls the backend directly.
 - `openSelect` — which dropdown (agent/model/thinking) is open.
 - `behavior` — `steer` vs `followUp`, only visible while Pi is running.
 - `submitting` — prevents double-send during the API call.
-- `preparingImages` — blocks send while clipboard images are being converted.
+- `preparingImages` — count of pastes still converting clipboard images; blocks send while non-zero.
 - `improving`, `improvePreset`, `suggestion` — isolated rewrite request and explicit comparison.
 - `previewingPrompt`, `savedPrompts`, `promptSave`, `savingPrompt` — prompt preview and save flow.
 

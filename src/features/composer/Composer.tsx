@@ -109,7 +109,7 @@ export const Composer = memo(function Composer({
   const draftStorageKey = `pi-livecraft.composer-draft.${session.id}`
   const [message, setMessage] = useState(() => readComposerDraft(draftStorageKey))
   const [images, setImages] = useState<ComposerImage[]>([])
-  const [preparingImages, setPreparingImages] = useState(false)
+  const [preparingImages, setPreparingImages] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [improving, setImproving] = useState(false)
   const [improvePreset, setImprovePreset] = useState('')
@@ -346,7 +346,7 @@ export const Composer = memo(function Composer({
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault()
     const nextMessage = message.trim()
-    if (preparingImages || (!nextMessage && images.length === 0)) return
+    if (preparingImages > 0 || (!nextMessage && images.length === 0)) return
     if (images.length > 0 && !supportsImages) {
       onError('The selected model does not accept images.')
       return
@@ -417,7 +417,7 @@ export const Composer = memo(function Composer({
       onError(`A message can contain at most ${maxComposerImages} images.`)
       return
     }
-    setPreparingImages(true)
+    setPreparingImages((count) => count + 1)
     try {
       const prepared = await Promise.all(files.slice(0, remaining).map(prepareComposerImage))
       const accepted = prepared.filter((image): image is ComposerImage => image !== null)
@@ -427,7 +427,7 @@ export const Composer = memo(function Composer({
     } catch (cause) {
       onError(cause)
     } finally {
-      setPreparingImages(false)
+      setPreparingImages((count) => count - 1)
     }
   }
 
@@ -676,7 +676,7 @@ export const Composer = memo(function Composer({
               <button
                 aria-label={commandPending ? 'Run command' : 'Send message'}
                 className={`icon-button send${commandPending ? ' command' : ''}`}
-                disabled={submitting || preparingImages
+                disabled={submitting || preparingImages > 0
                   || (!message.trim() && images.length === 0)}
                 type='submit'
               >
