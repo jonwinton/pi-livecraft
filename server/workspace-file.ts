@@ -1,5 +1,5 @@
 import { readFile, realpath, stat } from 'node:fs/promises'
-import { isAbsolute, relative, resolve } from 'node:path'
+import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { WorkspaceFile } from '../shared/types.ts'
 
 const maxWorkspaceFileSize = 2 * 1024 * 1024
@@ -28,7 +28,10 @@ export async function resolveWorkspaceFilePath(
   }
   if (!allowOutsideWorkspace) {
     const pathFromRoot = relative(root, path)
-    if (!pathFromRoot || pathFromRoot.startsWith('..') || isAbsolute(pathFromRoot))
+    if (
+      !pathFromRoot || pathFromRoot === '..' || pathFromRoot.startsWith(`..${sep}`)
+      || isAbsolute(pathFromRoot)
+    )
       throw new WorkspaceFileError('File must be inside the working directory', 403)
   }
 
