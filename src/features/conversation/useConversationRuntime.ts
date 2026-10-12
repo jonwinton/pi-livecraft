@@ -138,6 +138,8 @@ export function useConversationRuntime(
         delayNextRefresh = true
         request.needsRefresh = false
         const version = ++snapshotRefreshVersionRef.current
+        // Live messages are replaced on every change, so identity shows whether history can prune them.
+        const liveMessagesAtRequest = liveMessagesRef.current
         try {
           nextSnapshot = await getSnapshot(sessionId)
           if (request.cancelled) return nextSnapshot
@@ -160,7 +162,9 @@ export function useConversationRuntime(
                 liveEvent.sequence,
               )
             }
-          } else if (nextSnapshot.liveEvents.length === 0) {
+          } else if (
+            nextSnapshot.liveEvents.length === 0 && liveMessagesRef.current === liveMessagesAtRequest
+          ) {
             // Without a turn in progress, history is the whole branch; anything else was abandoned.
             const persisted = liveMessagesInHistory(nextSnapshot.messages, liveMessagesRef.current)
             if (persisted.length !== liveMessagesRef.current.length) {
