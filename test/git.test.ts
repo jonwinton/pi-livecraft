@@ -343,6 +343,33 @@ test('does not run repository-configured helpers while reading status or diffs',
   }
 })
 
+test(
+  'counts many untracked files within a small open-file limit',
+  { skip: process.platform === 'win32', timeout: 60_000 },
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'pi-livecraft-git-'))
+    try {
+      await execFile('git', ['init', '--quiet'], { cwd: directory })
+      for (let index = 0; index < 600; index += 1) {
+        await writeFile(join(directory, `file-${index}.txt`), 'line\n')
+      }
+      const script = `import('${
+        join(process.cwd(), 'server/features/git/git.ts')
+      }').then(async ({ getGitSnapshot }) => { const { files } = await getGitSnapshot(${
+        JSON.stringify(directory)
+      }); console.log(files.filter(({ additions }) => additions === 1).length) })`
+      const { stdout } = await execFile('sh', [
+        '-c',
+        `ulimit -n 256 && exec "${process.execPath}" --input-type=module -e "$0"`,
+        script,
+      ])
+      assert.equal(stdout.trim(), '600')
+    } finally {
+      await rm(directory, { force: true, recursive: true })
+    }
+  },
+)
+
 test('rejects commit without changes or message', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'pi-livecraft-git-'))
   try {
