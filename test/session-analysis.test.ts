@@ -267,6 +267,20 @@ test('reports the whole session cost as unattributed when no request carries usa
   assert.equal(analysis.unattributedCost, 0.07)
 })
 
+test('averages the two middle turn costs for an even turn count', () => {
+  const analysis = analyzeSession(
+    [
+      { role: 'user', timestamp: 100, content: 'Hello.' },
+      { role: 'assistant', content: [{ type: 'text', text: 'One.' }], usage: usage(1, 1, 0, 0, 0.25) },
+      { role: 'assistant', content: [{ type: 'text', text: 'Two.' }], usage: usage(1, 1, 0, 0, 0.75) },
+    ],
+    null,
+    false,
+  )
+
+  assert.equal(analysis.medianTurnCost, 0.5)
+})
+
 test('prépare un prompt borné sans transmettre les sorties des outils', () => {
   const analysis = analyzeSession(
     [
