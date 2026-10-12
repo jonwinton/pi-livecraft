@@ -115,7 +115,9 @@ export function analyzeSession(
   )
   const requests: MutableRequest[] = []
   const seenToolCallIds = new Set<string>()
-  let currentRequest: MutableRequest | undefined
+  /** Collects assistant turns and live tool calls that precede the first user message. */
+  const unrequested = createActiveRequest()
+  let currentRequest = unrequested
 
   messages.forEach((message, messageIndex) => {
     if (message.role === 'user') {
@@ -135,7 +137,6 @@ export function analyzeSession(
       requests.push(currentRequest)
       return
     }
-    if (!currentRequest) return
 
     if (message.role === 'assistant') {
       const usage = messageUsage(message)
@@ -169,7 +170,7 @@ export function analyzeSession(
     }
   })
 
-  const activeRequest = requests.at(-1) ?? createActiveRequest()
+  const activeRequest = requests.at(-1) ?? unrequested
   for (const execution of telemetry.toolExecutions ?? []) {
     if (seenToolCallIds.has(execution.id)) continue
     const call: AnalyzedToolCall = {
@@ -185,8 +186,8 @@ export function analyzeSession(
     activeRequest.toolCalls.push(call)
     seenToolCallIds.add(execution.id)
   }
-  if (activeRequest.messageIndex === -1 && activeRequest.toolCalls.length > 0)
-    requests.push(activeRequest)
+  if (unrequested.modelCallCount > 0 || unrequested.toolCalls.length > 0)
+    requests.unshift(unrequested)
 
   requests.forEach((request, index) => {
     request.cost = request.usage.cost
@@ -224,9 +225,7 @@ export function analyzeSession(
     costAvailable: statsCost !== undefined || attributionAvailable,
     attributedCost,
     attributionAvailable,
-    unattributedCost: statsCost !== undefined && attributionAvailable
-      ? Math.max(0, totalCost - attributedCost)
-      : 0,
+    unattributedCost: statsCost === undefined ? 0 : Math.max(0, statsCost - attributedCost),
     averageTurnCost: turnCosts.length
       ? turnCosts.reduce((total, cost) => total + cost, 0) / turnCosts.length
       : 0,
