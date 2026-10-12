@@ -75,6 +75,7 @@ manager.on('connected', () => {
   managerRuntime.connected()
   broadcast({ kind: 'event', event: 'manager_connected', sessionId: '' })
   void quotas.restoreFromIdleSession()
+  void pruneLiveSessionEvents()
 })
 manager.on('disconnected', () => {
   managerRuntime.disconnected()
@@ -508,6 +509,22 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   }
 
   sendJson(response, 404, { error: 'Not found' })
+}
+
+/**
+ * A replaced manager never reports exits for the sessions it took down, so drop their replay
+ * state once it is connected. Only entries that existed before the listing are candidates.
+ */
+async function pruneLiveSessionEvents(): Promise<void> {
+  const candidates = [...liveSessionEvents.keys()]
+  try {
+    const listed = await manager.request({ action: 'list' })
+    if (!Array.isArray(listed)) return
+    const open = new Set(listed.flatMap((session) => isObject(session) ? [session.id] : []))
+    for (const id of candidates) if (!open.has(id)) liveSessionEvents.delete(id)
+  } catch {
+    // The next reconnect retries; stale replay state only costs memory meanwhile.
+  }
 }
 
 async function piCommand(sessionId: string, command: JsonObject): Promise<JsonObject> {
