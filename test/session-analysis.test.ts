@@ -225,6 +225,48 @@ test('rattache une exécution live orpheline à une requête navigable de secour
   assert.equal(analysis.toolCalls[0]?.requestMessageIndex, -1)
 })
 
+test('counts assistant usage that precedes the first user message', () => {
+  const analysis = analyzeSession(
+    [
+      {
+        role: 'assistant',
+        content: [{ type: 'toolCall', id: 'call_early', name: 'read', arguments: {} }],
+        usage: usage(100, 10, 0, 0, 0.25),
+      },
+      { role: 'user', timestamp: 100, content: 'Continue.' },
+      { role: 'assistant', content: [{ type: 'text', text: 'Done.' }], usage: usage(200, 20, 0, 0, 0.5) },
+    ],
+    null,
+    false,
+  )
+
+  assert.deepEqual(
+    analysis.requests.map(({ messageIndex, cost, modelCallCount }) => ({ messageIndex, cost, modelCallCount })),
+    [
+      { messageIndex: -1, cost: 0.25, modelCallCount: 1 },
+      { messageIndex: 1, cost: 0.5, modelCallCount: 1 },
+    ],
+  )
+  assert.equal(analysis.attributedCost, 0.75)
+  assert.equal(analysis.totalCost, 0.75)
+  assert.deepEqual(analysis.toolCalls.map(({ id }) => id), ['call_early'])
+  assert.deepEqual(analysis.tokens, { cacheMiss: 300, cacheRead: 0, cacheWrite: 0, cost: 0.75, output: 30 })
+})
+
+test('reports the whole session cost as unattributed when no request carries usage', () => {
+  const analysis = analyzeSession(
+    [
+      { role: 'user', timestamp: 100, content: 'Hello.' },
+      { role: 'assistant', content: [{ type: 'text', text: 'Hi.' }] },
+    ],
+    { cost: 0.07 },
+    false,
+  )
+
+  assert.equal(analysis.attributionAvailable, false)
+  assert.equal(analysis.unattributedCost, 0.07)
+})
+
 test('prépare un prompt borné sans transmettre les sorties des outils', () => {
   const analysis = analyzeSession(
     [
