@@ -50,9 +50,23 @@ export function DirectoryPicker({ initialPath, recentPaths, onClose, onError, on
 
   const visibleRecentPaths = recentPaths.filter((recentPath) => recentPath !== initialPath)
 
+  // Only the latest pick may apply; cancelling (unmount) invalidates every pending pick.
+  const selectionVersionRef = useRef(0)
+  useEffect(() => () => {
+    selectionVersionRef.current += 1
+  }, [])
+
   /** Verifies that the path is still accessible before adopting it as the workspace. */
   function selectDirectory(nextPath: string): void {
-    void listDirectories(nextPath).then((directory) => onSelect(directory.path)).catch(onError)
+    const version = ++selectionVersionRef.current
+    const current = () => version === selectionVersionRef.current
+    void listDirectories(nextPath)
+      .then((directory) => {
+        if (current()) onSelect(directory.path)
+      })
+      .catch((cause: unknown) => {
+        if (current()) onError(cause)
+      })
   }
 
   /** Applies standard completion-list shortcuts without intercepting normal input. */
