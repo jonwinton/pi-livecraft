@@ -8,6 +8,8 @@ import {
   deleteTheme,
   duplicateTheme,
   parseThemePreferences,
+  persistThemePreferences,
+  readThemePreferences,
   renameTheme,
   resetTheme,
   resolveActiveTheme,
@@ -329,4 +331,24 @@ test('setActiveTheme change le thème actif', () => {
 test('setActiveTheme ignore les ids inconnus', () => {
   const result = setActiveTheme(basePrefs, 'unknown')
   assert.equal(result.active, 'light')
+})
+
+test('theme preferences survive storage that rejects writes', (t) => {
+  const stored = JSON.stringify({ active: 'dark', themes: [] })
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => key === 'pi-livecraft.themes' ? stored : null,
+      setItem: () => {
+        throw new Error('QuotaExceededError')
+      },
+      removeItem: () => undefined,
+    },
+  })
+  t.after(() => {
+    delete (globalThis as { localStorage?: unknown }).localStorage
+  })
+  const preferences = readThemePreferences()
+  assert.equal(preferences.active, 'dark')
+  assert.doesNotThrow(() => persistThemePreferences({ ...preferences, active: 'light' }))
 })
