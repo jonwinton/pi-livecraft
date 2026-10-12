@@ -35,6 +35,8 @@ export function GitWidget(
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [errorTarget, setErrorTarget] = useState<ErrorTarget | null>(null)
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  /** Identifies the latest diff request; selecting again or going Back makes older responses stale. */
+  const diffRequestRef = useRef(0)
   const hasChanges = snapshot.files.length > 0
 
   /** Clears any stuck error highlight after the shake animation ends. */
@@ -61,9 +63,12 @@ export function GitWidget(
   async function selectFile(path: string, commitHash?: string): Promise<void> {
     clearError()
     setSelectedPath(path)
+    const request = ++diffRequestRef.current
     try {
-      setFileDiff(await onFileSelect(path, commitHash))
+      const diff = await onFileSelect(path, commitHash)
+      if (request === diffRequestRef.current) setFileDiff(diff)
     } catch (error) {
+      if (request !== diffRequestRef.current) return
       setSelectedPath(null)
       reportError(error)
     }
@@ -219,6 +224,7 @@ export function GitWidget(
                 aria-label='Back to Git files'
                 className='git-back'
                 onClick={() => {
+                  diffRequestRef.current += 1
                   setFileDiff(null)
                   setSelectedPath(null)
                 }}
