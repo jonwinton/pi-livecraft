@@ -229,7 +229,7 @@ export function analyzeSession(
     averageTurnCost: turnCosts.length
       ? turnCosts.reduce((total, cost) => total + cost, 0) / turnCosts.length
       : 0,
-    medianTurnCost: quantile(turnCosts, 0.5),
+    medianTurnCost: median(turnCosts),
     turnCount: turnCosts.length,
     averageToolCallsPerTurn: turnCosts.length ? totalToolCalls / turnCosts.length : 0,
     totalToolCalls,
@@ -479,9 +479,12 @@ function messageTitle(message: JsonObject): string {
   return normalized.length > 90 ? `${normalized.slice(0, 89)}…` : normalized || 'Untitled request'
 }
 
-function quantile(sortedValues: number[], proportion: number): number {
+function median(sortedValues: number[]): number {
   if (sortedValues.length === 0) return 0
-  return sortedValues[Math.max(0, Math.ceil(sortedValues.length * proportion) - 1)] ?? 0
+  const middle = Math.floor(sortedValues.length / 2)
+  return sortedValues.length % 2 === 1
+    ? sortedValues[middle]
+    : (sortedValues[middle - 1] + sortedValues[middle]) / 2
 }
 
 function finiteNumber(value: unknown): number | undefined {
