@@ -205,6 +205,39 @@ test('keeps the newest message activity when renamed sessions have newer file ti
   assert.equal(recent[0].id, 'active')
 })
 
+test('reads a newest entry that starts exactly at the tail boundary', async () => {
+  const { directory, workspace } = await fixture()
+  const entry = (fields: object): string => JSON.stringify(fields)
+  const head = [
+    entry({
+      type: 'session',
+      version: 3,
+      id: 'edge',
+      timestamp: '2026-07-19T09:00:00.000Z',
+      cwd: workspace,
+    }),
+    entry({
+      type: 'message',
+      timestamp: '2026-07-19T09:00:00.000Z',
+      message: { role: 'user', content: 'first' },
+    }),
+    entry({ type: 'custom', padding: 'p'.repeat(200 * 1024) }),
+  ]
+    .join('\n') + '\n'
+  const last = entry({
+    type: 'message',
+    timestamp: '2026-07-19T11:00:00.000Z',
+    message: { role: 'assistant', content: 'a' },
+  })
+  // The final record plus its newline fills the last 64 KiB tail chunk exactly.
+  const final = last.replace('"a"', `"${'a'.repeat(64 * 1024 - last.length)}"`) + '\n'
+  assert.equal(Buffer.byteLength(final), 64 * 1024)
+  await writeFile(join(directory, 'edge.jsonl'), head + final)
+
+  const [session] = await listRecentPiSessions(workspace, directory)
+  assert.equal(session?.updatedAt, Date.parse('2026-07-19T11:00:00.000Z'))
+})
+
 async function writeSession(
   path: string,
   cwd: string,
