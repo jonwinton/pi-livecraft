@@ -611,6 +611,39 @@ test('disconnects a client that stops reading events', { timeout: 20_000 }, asyn
   }
 })
 
+test('bounds the exited sessions it keeps listing', { timeout: 60_000 }, async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'pi-manager-'))
+  const port = 45_000 + (process.pid % 10_000)
+  await writeFakePi(directory)
+  const manager = spawn(process.execPath, ['server/manager.ts'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      PATH: `${fakePiBin(directory)}${delimiter}${process.env.PATH}`,
+      PI_LIVECRAFT_MANAGER_PORT: String(port),
+    },
+    stdio: 'ignore',
+  })
+  const client = await connectManager(port)
+  try {
+    const ids: string[] = []
+    for (let index = 0; index < 52; index += 1) {
+      const created = await client.request('create', { cwd: process.cwd() })
+      ids.push(sessionId(created))
+      assert.equal((await client.request('close', { sessionId: ids.at(-1) })).ok, true)
+    }
+    const listed = await client.request('list', {})
+    assert.equal((listed.data as unknown[]).length, 50)
+    assert.equal(sessionStatus(listed, ids.at(-1) ?? ''), 'exited')
+    assert.equal(sessionStatus(listed, ids[0]), undefined)
+    assert.equal((await client.request('close', { sessionId: ids.at(-1) })).ok, true)
+  } finally {
+    client.close()
+    await stopProcess(manager)
+    await rm(directory, { force: true, recursive: true })
+  }
+})
+
 test('renames a persisted session through Pi RPC', { timeout: 10_000 }, async () => {
   const directory = await mkdtemp(join(tmpdir(), 'pi-manager-'))
   const port = 45_000 + (process.pid % 10_000)
