@@ -70,6 +70,8 @@ export function useWorkspaceSessions(
   const creatingSessionRef = useRef(false)
   const refreshVersionRef = useRef(0)
   const autoSelectOnRefreshRef = useRef(true)
+  // Updated with the state so async work can tell whether the user has since switched workspaces.
+  const workspacePathRef = useRef(workspacePath)
   sessionsRef.current = sessions
   recentSessionsRef.current = recentSessions
   sentSessionsRef.current = sentSessions
@@ -82,6 +84,7 @@ export function useWorkspaceSessions(
     void listDirectories('.')
       .then(({ path }) => {
         if (!active || window.localStorage.getItem('pi-livecraft.workspace-path') !== null) return
+        workspacePathRef.current = path
         setWorkspacePath(path)
         setRecentWorkspacePaths(recentWorkspaces(path, readRecentWorkspaces()))
       })
@@ -189,12 +192,18 @@ export function useWorkspaceSessions(
     )
     setRecentWorkspacePaths(nextRecentWorkspacePaths)
     onWorkspaceSelected()
+    workspacePathRef.current = path
     setWorkspacePath(path)
     setSelectedId(targetSessionId ?? '')
     setDirectoryPickerOpen(false)
     autoSelectOnRefreshRef.current = targetSessionId === undefined
     void refreshSessions(path)
   }, [onWorkspaceSelected, recentWorkspacePaths, refreshSessions])
+
+  const isCurrentWorkspace = useCallback(
+    (path: string): boolean => path === workspacePathRef.current,
+    [],
+  )
 
   const updatePinnedSessionName = useCallback((sessionPath: string, name: string): void => {
     setPinnedSessions((current) => {
@@ -402,6 +411,7 @@ export function useWorkspaceSessions(
     completedSessionIds,
     creatingSession,
     directoryPickerOpen,
+    isCurrentWorkspace,
     isRefreshingSessions,
     markSessionCompleted,
     nameSessionFromFirstPrompt,

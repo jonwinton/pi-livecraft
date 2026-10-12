@@ -322,6 +322,7 @@ function App() {
     completedSessionIds,
     creatingSession,
     directoryPickerOpen,
+    isCurrentWorkspace,
     isRefreshingSessions,
     markSessionCompleted,
     nameSessionFromFirstPrompt,
@@ -509,6 +510,8 @@ function App() {
       window.clearTimeout(gitRefreshTimerRef.current)
       gitRefreshTimerRef.current = undefined
     }
+    // An action started before a workspace switch finishes with a stale cwd; switching already refreshed.
+    if (!isCurrentWorkspace(cwd)) return
     const version = ++gitRefreshVersionRef.current
     try {
       const nextSnapshot = await getGitSnapshot(cwd)
@@ -516,7 +519,7 @@ function App() {
     } catch (cause) {
       if (notifyOnError && version === gitRefreshVersionRef.current) throw cause
     }
-  }, [workspacePath])
+  }, [isCurrentWorkspace, workspacePath])
   /** Schedules one Git refresh for a burst of completed tools. */
   const scheduleGitRefresh = useCallback((cwd = workspacePath): void => {
     if (gitRefreshTimerRef.current !== undefined)
